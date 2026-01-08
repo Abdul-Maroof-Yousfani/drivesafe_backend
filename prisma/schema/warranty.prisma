@@ -1,0 +1,286 @@
+// Warranty Portal models
+
+model Customer {
+  id                String   @id @default(uuid())
+  firstName         String
+  lastName          String
+  email             String
+  phone             String
+  address           String
+  // Vehicle info moved to CustomerVehicle
+  // vehicleMake       String
+  // vehicleModel      String
+  // vehicleYear       Int
+  // vin               String?
+  // registrationNumber String?
+  // mileage           Int       @default(0)
+  status            String    @default("active")
+  createdById       String?
+  createdBy         User?     @relation("CustomerCreatedBy", fields: [createdById], references: [id])
+  dealerId          String?
+  dealer            Dealer?   @relation(fields: [dealerId], references: [id], onDelete: SetNull)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  vehicles          CustomerVehicle[]
+  warrantySales     WarrantySale[]
+  
+  @@index([email])
+  @@index([phone])
+  @@index([dealerId])
+}
+
+model Dealer {
+  id                      String   @id @default(uuid())
+  businessNameLegal      String
+  businessNameTrading    String?
+  businessAddress         String
+  contactPersonName       String
+  phone                   String
+  email                   String   @unique
+  dealerLicenseNumber     String?
+  businessRegistrationNumber String?
+  bankDetails             String?   // JSON string for bank details
+  authorizedSignatory     String?   // JSON string for signatory details
+  dealerAgreementSigned   Boolean   @default(false)
+  onboardingDate          DateTime?
+  password                String
+  status                  String    @default("active")
+  
+  // Tenant database fields
+  databaseName            String?   @unique  // Name of dealer's database (e.g., dealer_abc123)
+  databaseUrl             String?            // Full connection string for dealer database
+  username                String?            // Auto-generated username for dealer login
+  credentialsGeneratedAt  DateTime?          // Timestamp when credentials were generated
+  excelFilePath           String?            // Path to Excel file containing credentials
+  
+  createdById             String?
+  createdBy               User?     @relation("DealerCreatedBy", fields: [createdById], references: [id])
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  
+  customers               Customer[]
+  warrantySales           WarrantySale[]
+  tenantDatabaseMapping   TenantDatabaseMapping?  @relation("DealerTenantMapping")
+  invoiceTemplate         InvoiceTemplate?
+  invoices                Invoice[]                @relation("DealerInvoices")
+  dealerStorage           DealerStorage?
+  
+  @@index([email])
+  @@index([phone])
+  @@index([databaseName])
+}
+
+model InvoiceTemplate {
+  id              String   @id @default(uuid())
+  // Relation to Dealer (if null, it is the Master/SA template)
+  dealerId        String?  @unique
+  dealer          Dealer?  @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  
+  // Customization Fields
+  companyName     String?  // Override business name if needed
+  companyAddress  String?  // Override address
+  logoUrl         String?
+  logoOffsetX     Int      @default(0)
+  logoOffsetY     Int      @default(0)
+  invoiceInfoOffsetX Int   @default(0)
+  invoiceInfoOffsetY Int   @default(0)
+  companyInfoOffsetX Int   @default(0)
+  companyInfoOffsetY Int   @default(0)
+  billToOffsetX     Int      @default(0)
+  billToOffsetY     Int      @default(0)
+  durationOffsetX   Int      @default(0)
+  durationOffsetY   Int      @default(0)
+  notesOffsetX      Int      @default(0)
+  notesOffsetY      Int      @default(0)
+  termsOffsetX      Int      @default(0)
+  termsOffsetY      Int      @default(0)
+  footerOffsetX     Int      @default(0)
+  footerOffsetY     Int      @default(0)
+  primaryColor    String   @default("#000000") // Hex color
+  accentColor     String   @default("#e5e7eb")
+  font            String   @default("Helvetica")
+  
+  // Content
+  headerText      String?
+  billToTitle     String   @default("Bill To:")
+  notesHeading    String?  @default("Notes")
+  footerText      String?
+  notes           String?  // e.g. "Thank you for your business"
+  termsHeading    String?  @default("Terms & Conditions")
+  termsText       String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([dealerId])
+}
+
+model WarrantyPackage {
+  id                String   @id @default(uuid())
+  name              String
+  description       String?
+  planLevel         String?
+  eligibility       String?
+  excess            Decimal?
+  labourRatePerHour Decimal?
+  fixedClaimLimit   Decimal?
+  price12Months     Decimal?
+  price24Months     Decimal?
+  price36Months     Decimal?
+  /// Dealer internal prices (cost to dealer when SA assigns package)
+  dealerPrice12Months  Decimal?
+  dealerPrice24Months  Decimal?
+  dealerPrice36Months  Decimal?
+  /// Total coverage duration in months (normalized)
+  coverageDuration  Int
+  /// The raw duration value entered by admin (e.g. 12)
+  durationValue     Int
+  /// Unit for duration: "months" or "years"
+  durationUnit      String   @default("months")
+  /// Context: "drive_safe" | "dealer" | "direct_customer"
+  context           String   @default("drive_safe")
+  /// Base price (required for drive_safe context, optional otherwise)
+  price             Decimal?
+  status            String    @default("active")
+  createdById       String?
+  createdBy         User?     @relation("WarrantyPackageCreatedBy", fields: [createdById], references: [id])
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  warrantySales     WarrantySale[]
+  items             WarrantyPackageItem[]
+}
+
+model WarrantyPackageItem {
+  id                String          @id @default(uuid())
+  warrantyPackageId String
+  warrantyPackage   WarrantyPackage @relation(fields: [warrantyPackageId], references: [id], onDelete: Cascade)
+  warrantyItemId    String
+  warrantyItem      WarrantyItem    @relation(fields: [warrantyItemId], references: [id], onDelete: Cascade)
+  type              String          @default("benefit") // "benefit" or "feature"
+
+  @@unique([warrantyPackageId, warrantyItemId, type])
+  @@index([warrantyPackageId])
+  @@index([warrantyItemId])
+}
+
+model WarrantySale {
+  id                      String        @id @default(uuid())
+  customerId              String?
+  customer                Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  dealerId                String?
+  dealer                  Dealer?       @relation(fields: [dealerId], references: [id], onDelete: SetNull)
+  salesRepresentativeName String?
+  warrantyPackageId       String
+  warrantyPackage         WarrantyPackage @relation(fields: [warrantyPackageId], references: [id])
+  vehicleId               String?
+  vehicle                 CustomerVehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  coverageStartDate       DateTime
+  coverageEndDate         DateTime
+  // Per‑assignment override fields (do not alter original package)
+  excess                  Decimal?
+  labourRatePerHour       Decimal?
+  fixedClaimLimit         Decimal?
+  price12Months           Decimal?
+  price24Months           Decimal?
+  price36Months           Decimal?
+  // Dealer cost fields (for margin visibility)
+  dealerCost12Months      Decimal?
+  dealerCost24Months      Decimal?
+  dealerCost36Months      Decimal?
+  warrantyPrice           Decimal
+  paymentMethod           String
+  saleDate                DateTime
+  customerConsent         Boolean       @default(false)
+  mileageAtSale           Int?
+  customerSignature       String?       // Reference to uploaded signature file
+  policyNumber            String        @unique
+  status                  String        @default("active")
+  createdById             String?
+  createdBy               User?         @relation("WarrantySaleCreatedBy", fields: [createdById], references: [id])
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  invoices                Invoice[]
+
+  @@index([customerId])
+  @@index([vehicleId])
+  @@index([dealerId])
+  @@index([policyNumber])
+  @@index([saleDate])
+}
+
+model Invoice {
+  id              String       @id @default(uuid())
+  invoiceNumber   String       @unique
+  warrantySaleId  String
+  warrantySale    WarrantySale @relation(fields: [warrantySaleId], references: [id], onDelete: Cascade)
+  dealerId        String?
+  dealer          Dealer?      @relation("DealerInvoices", fields: [dealerId], references: [id], onDelete: SetNull)
+  amount          Decimal      // Amount dealer owes to SA (dealer cost)
+  status          String       @default("pending") // pending, paid, overdue, cancelled
+  invoiceDate     DateTime     @default(now())
+  dueDate         DateTime
+  paidDate        DateTime?
+  paymentMethod   String?      // cash, bank_transfer, cheque, etc.
+  notes           String?
+  createdById     String?
+  createdBy       User?        @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([warrantySaleId])
+  @@index([dealerId])
+  @@index([invoiceNumber])
+  @@index([status])
+  @@index([invoiceDate])
+  @@index([dueDate])
+}
+
+model CustomerVehicle {
+  id                 String   @id @default(uuid())
+  customerId         String
+  customer           Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  make               String
+  model              String
+  year               Int
+  vin                String?
+  registrationNumber String?
+  mileage            Int      @default(0)
+  status             String   @default("active")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  warrantySales     WarrantySale[]
+
+  @@index([customerId])
+  @@index([vin])
+}
+
+model WarrantyItem {
+  id        String   @id @default(uuid())
+  label     String
+  type      String   @default("benefit")
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  packageItems WarrantyPackageItem[]
+
+  @@index([type])
+}
+
+model DealerStorage {
+  id              String   @id @default(uuid())
+  dealerId        String   @unique
+  dealer          Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  usedBytes       BigInt   @default(0)
+  limitBytes      BigInt   @default(1073741824) // 1GB in bytes
+  lastCalculated  DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([dealerId])
+}
+

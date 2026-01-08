@@ -1,0 +1,702 @@
+// AUTO-GENERATED FILE — DO NOT EDIT MANUALLY
+// Generated from prisma/schema/*.prisma (single source of truth)
+// This is the tenant (dealer) database schema: it excludes master/auth models (User/Dealer/etc.)
+// and strips relation fields pointing to those excluded models.
+
+model Employee {
+  id                        String    @id @default(uuid())
+  userId                    String?   @unique
+  employeeId                String    @unique
+  employeeName              String
+  fatherHusbandName         String
+  department                String
+  subDepartment             String?
+  employeeGrade             String
+  attendanceId              String
+  designation               String
+  maritalStatus             String
+  employmentStatus          String
+  probationExpiryDate       DateTime?
+  cnicNumber                String    @unique
+  cnicExpiryDate            DateTime?
+  lifetimeCnic              Boolean   @default(false)
+  joiningDate               DateTime
+  dateOfBirth               DateTime
+  nationality               String
+  gender                    String
+  contactNumber             String
+  emergencyContactNumber    String?
+  emergencyContactPerson    String?
+  personalEmail             String?
+  officialEmail             String    @unique
+  country                   String
+  province                  String
+  city                      String
+  area                      String?
+  employeeSalary            Decimal
+  eobi                      Boolean   @default(false)
+  eobiNumber                String?
+  providentFund             Boolean   @default(false)
+  overtimeApplicable        Boolean   @default(false)
+  daysOff                   String?
+  reportingManager          String
+  workingHoursPolicy        String
+  branch                    String
+  leavesPolicy              String
+  allowRemoteAttendance     Boolean   @default(false)
+  currentAddress            String?
+  permanentAddress          String?
+  bankName                  String
+  accountNumber             String
+  accountTitle              String
+  laptop                    Boolean   @default(false)
+  card                      Boolean   @default(false)
+  mobileSim                 Boolean   @default(false)
+  key                       Boolean   @default(false)
+  tools                     Boolean   @default(false)
+  accountType               String?
+  password                  String?
+  roles                     String?
+  status                    String    @default("active")
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+}
+
+model ExitClearance {
+  id                      String   @id @default(uuid())
+  employeeName            String
+  designation             String?
+  department              String?
+  subDepartment           String?
+  location                String?
+  leavingReason           String?
+  contractEnd             DateTime?
+  lastWorkingDate         DateTime
+  reportingManager        String?
+  date                    DateTime @default(now())
+  // IT Department
+  itAccessControl         Boolean  @default(false)
+  itPasswordInactivated   Boolean  @default(false)
+  itLaptopReturned        Boolean  @default(false)
+  itEquipment             Boolean  @default(false)
+  itWifiDevice            Boolean  @default(false)
+  itMobileDevice          Boolean  @default(false)
+  itSimCard               Boolean  @default(false)
+  itBillsSettlement       Boolean  @default(false)
+  // Finance Department
+  financeAdvance          Boolean  @default(false)
+  financeLoan             Boolean  @default(false)
+  financeOtherLiabilities Boolean  @default(false)
+  // Admin Department
+  adminVehicle            Boolean  @default(false)
+  adminKeys               Boolean  @default(false)
+  adminOfficeAccessories  Boolean  @default(false)
+  adminMobilePhone        Boolean  @default(false)
+  adminVisitingCards      Boolean  @default(false)
+  // HR Department
+  hrEobi                  Boolean  @default(false)
+  hrProvidentFund         Boolean  @default(false)
+  hrIdCard                Boolean  @default(false)
+  hrMedical               Boolean  @default(false)
+  hrThumbImpression       Boolean  @default(false)
+  hrLeavesRemaining       Boolean  @default(false)
+  hrOtherCompensation     Boolean  @default(false)
+  note                    String?
+  approvalStatus          String   @default("pending")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+model Designation {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  status      String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model JobType {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  status      String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Institute {
+  id             String          @id @default(uuid())
+  name           String          @unique
+  status         String          @default("active")
+  createdById    String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  qualifications Qualification[]
+}
+
+model Qualification {
+  id            String     @id @default(uuid())
+  instituteId   String?
+  institute     Institute? @relation(fields: [instituteId], references: [id], onDelete: SetNull)
+  instituteName String
+  qualification String
+  country       String
+  city          String
+  status        String     @default("active")
+  createdById   String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+model MaritalStatus {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  status      String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model DegreeType {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  status      String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Country {
+  id        String   @id @default(uuid())
+  name      String
+  iso       String
+  nicename  String
+  iso3      String
+  phoneCode Int
+  numcode   Int
+  cities    City[]
+  states    State[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model City {
+  id          String   @id @default(uuid())
+  name        String
+  countryId   String
+  country     Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  stateId     String
+  state       State   @relation(fields: [stateId], references: [id], onDelete: Cascade)
+  status      String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  branches    Branch[]
+
+  @@unique([name, countryId, stateId])
+}
+
+model State {
+  id          String   @id @default(uuid())
+  name        String
+  countryId   String
+  country     Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  status      String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  cities      City[]
+}
+
+model Branch {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  address     String?
+  cityId      String?  @map("city_id")
+  city        City?    @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  status      String   @default("active") // active, inactive
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  }
+
+model AllowanceHead {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  status      String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model DeductionHead {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  status      String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model LoanType {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  status      String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model LeaveType {
+  id                      String                    @id @default(uuid())
+  name                    String                    @unique
+  status                  String                    @default("active")
+  createdById             String?
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  leavesPolicies          LeavesPolicyLeaveType[]
+}
+
+model LeavesPolicy {
+  id                      String                    @id @default(uuid())
+  name                    String                    @unique
+  details                 String?
+  policyDateFrom          DateTime?
+  policyDateTill          DateTime?
+  fullDayDeductionRate    Decimal?
+  halfDayDeductionRate    Decimal?
+  shortLeaveDeductionRate Decimal?
+  status                  String                    @default("active")
+  createdById             String?
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  leaveTypes              LeavesPolicyLeaveType[]
+}
+
+model LeavesPolicyLeaveType {
+  id             String        @id @default(uuid())
+  leavesPolicyId String
+  leavesPolicy   LeavesPolicy  @relation(fields: [leavesPolicyId], references: [id], onDelete: Cascade)
+  leaveTypeId    String
+  leaveType      LeaveType     @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+  numberOfLeaves Int
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([leavesPolicyId, leaveTypeId])
+}
+
+model Equipment {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  status      String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SalaryBreakup {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  details     String?
+  status      String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TaxSlab {
+  id          String   @id @default(uuid())
+  name        String
+  minAmount   Decimal
+  maxAmount   Decimal
+  rate        Decimal
+  status      String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model BonusType {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  status      String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ApprovalSetting {
+  id          String   @id @default(uuid())
+  name        String
+  levels      Int      @default(1)
+  details     String?
+  status      String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Department {
+  id             String          @id @default(uuid())
+  name           String          @unique
+  createdById    String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  subDepartments SubDepartment[]
+}
+
+model SubDepartment {
+  id           String     @id @default(uuid())
+  name         String
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  createdById  String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([name, departmentId])
+}
+
+model EOBI {
+  id          String   @id @default(uuid())
+  name        String
+  amount      Decimal
+  yearMonth   String
+  status      String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model EmployeeGrade {
+  id          String   @id @default(uuid())
+  grade       String   @unique
+  status      String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model EmployeeStatus {
+  id          String   @id @default(uuid())
+  status      String   @unique
+  statusType  String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ProvidentFund {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  percentage  Decimal
+  status      String   @default("active")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model WorkingHoursPolicy {
+  id                        String   @id @default(uuid())
+  name                      String   @unique
+  startWorkingHours         String
+  endWorkingHours           String
+  shortDayMins              Int?
+  startBreakTime            String?
+  endBreakTime              String?
+  halfDayStartTime          String?
+  lateStartTime             String?
+  lateDeductionType         String?
+  applyDeductionAfterLates  Int?
+  lateDeductionPercent      Decimal?
+  halfDayDeductionType      String?
+  applyDeductionAfterHalfDays Int?
+  halfDayDeductionAmount    Decimal?
+  shortDayDeductionType     String?
+  applyDeductionAfterShortDays Int?
+  shortDayDeductionAmount   Decimal?
+  overtimeRate              Decimal?
+  gazzetedOvertimeRate      Decimal?
+  dayOverrides              Json?    // Stores day-wise overrides: { monday: { enabled, overrideHours, startTime, endTime, overrideBreak, startBreakTime, endBreakTime, dayType }, ... }
+  status                    String   @default("active")
+  createdById               String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+}
+
+model FileUpload {
+  id           String   @id @default(uuid())
+  filename     String
+  mimetype     String
+  size         Int
+  path         String?
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Customer {
+  id                String   @id @default(uuid())
+  firstName         String
+  lastName          String
+  email             String
+  phone             String
+  address           String
+  // Vehicle info moved to CustomerVehicle
+  // vehicleMake       String
+  // vehicleModel      String
+  // vehicleYear       Int
+  // vin               String?
+  // registrationNumber String?
+  // mileage           Int       @default(0)
+  status            String    @default("active")
+  createdById       String?
+  dealerId          String?
+  dealer            Dealer?   @relation(fields: [dealerId], references: [id], onDelete: SetNull)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  vehicles          CustomerVehicle[]
+  warrantySales     WarrantySale[]
+  
+  @@index([email])
+  @@index([phone])
+  @@index([dealerId])
+}
+
+model Dealer {
+  id                      String   @id @default(uuid())
+  businessNameLegal      String
+  businessNameTrading    String?
+  businessAddress         String
+  contactPersonName       String
+  phone                   String
+  email                   String   @unique
+  dealerLicenseNumber     String?
+  businessRegistrationNumber String?
+  bankDetails             String?   // JSON string for bank details
+  authorizedSignatory     String?   // JSON string for signatory details
+  dealerAgreementSigned   Boolean   @default(false)
+  onboardingDate          DateTime?
+  password                String
+  status                  String    @default("active")
+  
+  // Tenant database fields
+  databaseName            String?   @unique  // Name of dealer's database (e.g., dealer_abc123)
+  databaseUrl             String?            // Full connection string for dealer database
+  username                String?            // Auto-generated username for dealer login
+  credentialsGeneratedAt  DateTime?          // Timestamp when credentials were generated
+  excelFilePath           String?            // Path to Excel file containing credentials
+  
+  createdById             String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  
+  customers               Customer[]
+  warrantySales           WarrantySale[]
+  invoiceTemplate         InvoiceTemplate?
+  invoices                Invoice[]                @relation("DealerInvoices")
+  
+  @@index([email])
+  @@index([phone])
+  @@index([databaseName])
+}
+
+model InvoiceTemplate {
+  id              String   @id @default(uuid())
+  // Relation to Dealer (if null, it is the Master/SA template)
+  dealerId        String?  @unique
+  dealer          Dealer?  @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  
+  // Customization Fields
+  companyName     String?  // Override business name if needed
+  companyAddress  String?  // Override address
+  logoUrl         String?
+  logoOffsetX     Int      @default(0)
+  logoOffsetY     Int      @default(0)
+  invoiceInfoOffsetX Int   @default(0)
+  invoiceInfoOffsetY Int   @default(0)
+  companyInfoOffsetX Int   @default(0)
+  companyInfoOffsetY Int   @default(0)
+  billToOffsetX     Int      @default(0)
+  billToOffsetY     Int      @default(0)
+  durationOffsetX   Int      @default(0)
+  durationOffsetY   Int      @default(0)
+  notesOffsetX      Int      @default(0)
+  notesOffsetY      Int      @default(0)
+  termsOffsetX      Int      @default(0)
+  termsOffsetY      Int      @default(0)
+  footerOffsetX     Int      @default(0)
+  footerOffsetY     Int      @default(0)
+  primaryColor    String   @default("#000000") // Hex color
+  accentColor     String   @default("#e5e7eb")
+  font            String   @default("Helvetica")
+  
+  // Content
+  headerText      String?
+  billToTitle     String   @default("Bill To:")
+  notesHeading    String?  @default("Notes")
+  footerText      String?
+  notes           String?  // e.g. "Thank you for your business"
+  termsHeading    String?  @default("Terms & Conditions")
+  termsText       String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([dealerId])
+}
+
+model WarrantyPackage {
+  id                String   @id @default(uuid())
+  name              String
+  description       String?
+  planLevel         String?
+  eligibility       String?
+  excess            Decimal?
+  labourRatePerHour Decimal?
+  fixedClaimLimit   Decimal?
+  price12Months     Decimal?
+  price24Months     Decimal?
+  price36Months     Decimal?
+  /// Dealer internal prices (cost to dealer when SA assigns package)
+  dealerPrice12Months  Decimal?
+  dealerPrice24Months  Decimal?
+  dealerPrice36Months  Decimal?
+  /// Total coverage duration in months (normalized)
+  coverageDuration  Int
+  /// The raw duration value entered by admin (e.g. 12)
+  durationValue     Int
+  /// Unit for duration: "months" or "years"
+  durationUnit      String   @default("months")
+  /// Context: "drive_safe" | "dealer" | "direct_customer"
+  context           String   @default("drive_safe")
+  /// Base price (required for drive_safe context, optional otherwise)
+  price             Decimal?
+  status            String    @default("active")
+  createdById       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  warrantySales     WarrantySale[]
+  items             WarrantyPackageItem[]
+}
+
+model WarrantyPackageItem {
+  id                String          @id @default(uuid())
+  warrantyPackageId String
+  warrantyPackage   WarrantyPackage @relation(fields: [warrantyPackageId], references: [id], onDelete: Cascade)
+  warrantyItemId    String
+  warrantyItem      WarrantyItem    @relation(fields: [warrantyItemId], references: [id], onDelete: Cascade)
+  type              String          @default("benefit") // "benefit" or "feature"
+
+  @@unique([warrantyPackageId, warrantyItemId, type])
+  @@index([warrantyPackageId])
+  @@index([warrantyItemId])
+}
+
+model WarrantySale {
+  id                      String        @id @default(uuid())
+  customerId              String?
+  customer                Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  dealerId                String?
+  dealer                  Dealer?       @relation(fields: [dealerId], references: [id], onDelete: SetNull)
+  salesRepresentativeName String?
+  warrantyPackageId       String
+  warrantyPackage         WarrantyPackage @relation(fields: [warrantyPackageId], references: [id])
+  vehicleId               String?
+  vehicle                 CustomerVehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  coverageStartDate       DateTime
+  coverageEndDate         DateTime
+  // Per‑assignment override fields (do not alter original package)
+  excess                  Decimal?
+  labourRatePerHour       Decimal?
+  fixedClaimLimit         Decimal?
+  price12Months           Decimal?
+  price24Months           Decimal?
+  price36Months           Decimal?
+  // Dealer cost fields (for margin visibility)
+  dealerCost12Months      Decimal?
+  dealerCost24Months      Decimal?
+  dealerCost36Months      Decimal?
+  warrantyPrice           Decimal
+  paymentMethod           String
+  saleDate                DateTime
+  customerConsent         Boolean       @default(false)
+  mileageAtSale           Int?
+  customerSignature       String?       // Reference to uploaded signature file
+  policyNumber            String        @unique
+  status                  String        @default("active")
+  createdById             String?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  invoices                Invoice[]
+
+  @@index([customerId])
+  @@index([vehicleId])
+  @@index([dealerId])
+  @@index([policyNumber])
+  @@index([saleDate])
+}
+
+model Invoice {
+  id              String       @id @default(uuid())
+  invoiceNumber   String       @unique
+  warrantySaleId  String
+  warrantySale    WarrantySale @relation(fields: [warrantySaleId], references: [id], onDelete: Cascade)
+  dealerId        String?
+  dealer          Dealer?      @relation("DealerInvoices", fields: [dealerId], references: [id], onDelete: SetNull)
+  amount          Decimal      // Amount dealer owes to SA (dealer cost)
+  status          String       @default("pending") // pending, paid, overdue, cancelled
+  invoiceDate     DateTime     @default(now())
+  dueDate         DateTime
+  paidDate        DateTime?
+  paymentMethod   String?      // cash, bank_transfer, cheque, etc.
+  notes           String?
+  createdById     String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([warrantySaleId])
+  @@index([dealerId])
+  @@index([invoiceNumber])
+  @@index([status])
+  @@index([invoiceDate])
+  @@index([dueDate])
+}
+
+model CustomerVehicle {
+  id                 String   @id @default(uuid())
+  customerId         String
+  customer           Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  make               String
+  model              String
+  year               Int
+  vin                String?
+  registrationNumber String?
+  mileage            Int      @default(0)
+  status             String   @default("active")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  warrantySales     WarrantySale[]
+
+  @@index([customerId])
+  @@index([vin])
+}
+
+model WarrantyItem {
+  id        String   @id @default(uuid())
+  label     String
+  type      String   @default("benefit")
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  packageItems WarrantyPackageItem[]
+
+  @@index([type])
+}

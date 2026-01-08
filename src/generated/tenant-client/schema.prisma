@@ -1,0 +1,11 @@
+// Base configuration for Tenant Prisma schema (dealer databases)
+
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../../src/generated/tenant-client"
+  previewFeatures = ["prismaSchemaFolder"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
