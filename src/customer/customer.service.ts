@@ -4,6 +4,7 @@ import {
   BadRequestException,
   NotFoundException,
   InternalServerErrorException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
@@ -110,6 +111,18 @@ export class CustomerService {
 
     return this.runInTenantContext(user, async (prisma) => {
       const where: any = {};
+      
+      // If customer role, only return their own record
+      if (user.role === 'customer') {
+        const masterUser = await this.prisma.user.findUnique({
+          where: { id: user.userId },
+          select: { email: true },
+        });
+        if (masterUser) {
+          where.email = masterUser.email;
+        }
+      }
+      
       if (search) {
         where.OR = [
           { firstName: { contains: search, mode: 'insensitive' } },
@@ -145,6 +158,21 @@ export class CustomerService {
   async findOne(id: string, user: any) {
     return this.runInTenantContext(user, async (prisma) => {
       const isMasterDb = ['admin', 'super_admin'].includes(user.role);
+      
+      // If customer role, verify they're accessing their own record
+      if (user.role === 'customer') {
+        const masterUser = await this.prisma.user.findUnique({
+          where: { id: user.userId },
+          select: { email: true },
+        });
+        const customerRecord = await prisma.customer.findUnique({
+          where: { id },
+          select: { email: true },
+        });
+        if (!customerRecord || customerRecord.email !== masterUser?.email) {
+          throw new ForbiddenException('You can only access your own customer record');
+        }
+      }
 
       const customer = await prisma.customer.findUnique({
         where: { id },
@@ -260,6 +288,17 @@ export class CustomerService {
     return this.runInTenantContext(user, async (prisma) => {
       const exists = await prisma.customer.findUnique({ where: { id } });
       if (!exists) throw new NotFoundException('Customer not found');
+      
+      // If customer role, verify they're updating their own record
+      if (user.role === 'customer') {
+        const masterUser = await this.prisma.user.findUnique({
+          where: { id: user.userId },
+          select: { email: true },
+        });
+        if (exists.email !== masterUser?.email) {
+          throw new ForbiddenException('You can only update your own customer record');
+        }
+      }
 
       return prisma.customer.update({
         where: { id },
@@ -273,6 +312,17 @@ export class CustomerService {
     return this.runInTenantContext(user, async (prisma) => {
       const exists = await prisma.customer.findUnique({ where: { id } });
       if (!exists) throw new NotFoundException('Customer not found');
+      
+      // If customer role, verify they're deleting their own record
+      if (user.role === 'customer') {
+        const masterUser = await this.prisma.user.findUnique({
+          where: { id: user.userId },
+          select: { email: true },
+        });
+        if (exists.email !== masterUser?.email) {
+          throw new ForbiddenException('You can only delete your own customer record');
+        }
+      }
 
       await prisma.customer.delete({ where: { id } });
       return { message: 'Customer deleted successfully' };
@@ -289,6 +339,17 @@ export class CustomerService {
         where: { id: customerId },
       });
       if (!customer) throw new NotFoundException('Customer not found');
+      
+      // If customer role, verify they're adding vehicle to their own record
+      if (user.role === 'customer') {
+        const masterUser = await this.prisma.user.findUnique({
+          where: { id: user.userId },
+          select: { email: true },
+        });
+        if (customer.email !== masterUser?.email) {
+          throw new ForbiddenException('You can only add vehicles to your own customer record');
+        }
+      }
 
       // Super Admin can only add vehicles to non-dealer customers
       if (
@@ -322,6 +383,17 @@ export class CustomerService {
       });
 
       if (!existing) throw new NotFoundException('Vehicle not found');
+      
+      // If customer role, verify they're updating their own vehicle
+      if (user.role === 'customer') {
+        const masterUser = await this.prisma.user.findUnique({
+          where: { id: user.userId },
+          select: { email: true },
+        });
+        if (existing.customer?.email !== masterUser?.email) {
+          throw new ForbiddenException('You can only update your own vehicles');
+        }
+      }
 
       // Super Admin can only update vehicles of non-dealer customers
       if (
@@ -351,6 +423,8 @@ export class CustomerService {
       }
       if (updateVehicleDto.mileage !== undefined)
         updateData.mileage = Number(updateVehicleDto.mileage);
+      if (updateVehicleDto.transmission !== undefined)
+        updateData.transmission = updateVehicleDto.transmission;
 
       if (Object.keys(updateData).length === 0) {
         throw new BadRequestException('No fields to update');
@@ -371,6 +445,17 @@ export class CustomerService {
       });
 
       if (!existing) throw new NotFoundException('Vehicle not found');
+      
+      // If customer role, verify they're deleting their own vehicle
+      if (user.role === 'customer') {
+        const masterUser = await this.prisma.user.findUnique({
+          where: { id: user.userId },
+          select: { email: true },
+        });
+        if (existing.customer?.email !== masterUser?.email) {
+          throw new ForbiddenException('You can only delete your own vehicles');
+        }
+      }
 
       // Super Admin can only delete vehicles of non-dealer customers
       if (
@@ -413,6 +498,33 @@ export class CustomerService {
       const tenantClient =
         await this.tenantDb.getTenantPrismaByDealerId(tenantId);
       return fn(tenantClient);
+    }
+    
+    // If Customer, determine their context (master or tenant DB)
+    if (user.role === 'customer') {
+      // First, try to find customer in master DB
+      const masterUser = await this.prisma.user.findUnique({
+        where: { id: user.userId },
+        select: { email: true },
+      });
+      
+      if (masterUser) {
+        const customerInMaster = await this.prisma.customer.findFirst({
+          where: { email: masterUser.email },
+          select: { dealerId: true },
+        });
+        
+        // If customer exists in master DB and has dealerId, use tenant DB
+        if (customerInMaster?.dealerId) {
+          const tenantClient = await this.tenantDb.getTenantPrismaByDealerId(
+            customerInMaster.dealerId,
+          );
+          return fn(tenantClient);
+        }
+        
+        // Otherwise use master DB
+        return fn(this.prisma);
+      }
     }
 
     throw new BadRequestException('Invalid role for context switching');

@@ -115,8 +115,11 @@ export class UploadService {
       },
     });
 
-    // Update dealer storage usage
-    await this.updateDealerStorageUsage(dealerId, finalSize);
+    // Update dealer storage usage only for real dealer uploads
+    // Skip for system-wide uploads (super_admin, system, customer uploads)
+    if (dealerId !== 'super_admin' && dealerId !== 'system') {
+      await this.updateDealerStorageUsage(dealerId, finalSize);
+    }
 
     return {
       id: fileUpload.id,
@@ -184,7 +187,7 @@ export class UploadService {
    * Get all files for a dealer
    */
   async getFiles(
-    dealerId: string,
+    dealerId?: string,
     category?: string,
   ): Promise<
     {
@@ -197,7 +200,10 @@ export class UploadService {
       createdAt: Date;
     }[]
   > {
-    const where: any = { dealerId };
+    const where: any = {};
+    if (dealerId) {
+      where.dealerId = dealerId;
+    }
     if (category) {
       where.category = category;
     }
@@ -262,11 +268,117 @@ export class UploadService {
   }
 
   /**
+   * Process upload for super admin (no dealer context)
+   */
+  async processUploadForSuperAdmin(
+    file: Express.Multer.File,
+    uploadedById: string,
+    category?: string,
+  ): Promise<{
+    id: string;
+    filename: string;
+    url: string;
+    size: number;
+    mimetype: string;
+  }> {
+    // Determine category from mimetype if not provided
+    const fileCategory =
+      category || this.storageService.getCategoryFromMimeType(file.mimetype);
+
+    // For super admin, use master storage path
+    const masterPath = this.storageService.getMasterStoragePath();
+    const categoryPath = this.storageService.getCategoryPath(
+      masterPath,
+      fileCategory,
+    );
+
+    // Ensure directory exists
+    if (!fs.existsSync(categoryPath)) {
+      fs.mkdirSync(categoryPath, { recursive: true });
+    }
+
+    // Generate unique filename
+    const newFilename = this.storageService.generateFilename(file.originalname);
+    const filePath = path.join(categoryPath, newFilename);
+
+    let finalSize = file.size;
+
+    // Optimize images with Sharp (for logos, keep original quality)
+    if (file.mimetype.startsWith('image/') && fileCategory === 'logos') {
+      try {
+        const imageBuffer = file.buffer || fs.readFileSync(file.path);
+        // For logos, resize but maintain quality
+        const optimized = await sharp(imageBuffer)
+          .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+          .png({ quality: 90 })
+          .toBuffer();
+
+        fs.writeFileSync(filePath, optimized);
+        finalSize = optimized.length;
+        this.logger.log(
+          `Optimized logo from ${file.size} to ${finalSize} bytes`,
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Logo optimization failed, saving original: ${error.message}`,
+        );
+        if (file.buffer) {
+          fs.writeFileSync(filePath, file.buffer);
+        } else if (file.path) {
+          fs.copyFileSync(file.path, filePath);
+        }
+      }
+    } else {
+      // For non-logos, save as-is
+      if (file.buffer) {
+        fs.writeFileSync(filePath, file.buffer);
+      } else if (file.path) {
+        fs.copyFileSync(file.path, filePath);
+      }
+    }
+
+    // Generate URL (relative path from public folder)
+    const relativePath = path.relative(
+      path.join(process.cwd(), 'public'),
+      filePath,
+    );
+    const url = `/${relativePath.replace(/\\/g, '/')}`;
+
+    // Save file record in database (no dealerId for super admin)
+    const fileRecord = await this.prisma.fileUpload.create({
+      data: {
+        filename: newFilename,
+        originalFilename: file.originalname,
+        path: filePath,
+        url,
+        size: finalSize,
+        mimetype: file.mimetype,
+        category: fileCategory,
+        createdById: uploadedById,
+        // dealerId is null for super admin uploads
+      },
+    });
+
+    return {
+      id: fileRecord.id,
+      filename: newFilename,
+      url,
+      size: finalSize,
+      mimetype: file.mimetype,
+    };
+  }
+
+  /**
    * Delete a file
    */
-  async deleteFile(fileId: string, dealerId: string): Promise<void> {
+  async deleteFile(fileId: string, dealerId?: string): Promise<void> {
+    const where: any = { id: fileId };
+    if (dealerId) {
+      where.dealerId = dealerId;
+    }
+
     const file = await this.prisma.fileUpload.findFirst({
-      where: { id: fileId, dealerId },
+      where,
     });
 
     if (!file) {
@@ -283,10 +395,10 @@ export class UploadService {
       where: { id: fileId },
     });
 
-    // Update storage usage
-    if (deletedSize > 0) {
+    // Update storage usage only if dealer context exists
+    if (deletedSize > 0 && file.dealerId) {
       await this.prisma.dealerStorage.update({
-        where: { dealerId },
+        where: { dealerId: file.dealerId },
         data: {
           usedBytes: {
             decrement: BigInt(deletedSize),
@@ -296,6 +408,6 @@ export class UploadService {
       });
     }
 
-    this.logger.log(`Deleted file ${fileId} for dealer ${dealerId}`);
+    this.logger.log(`Deleted file ${fileId}`);
   }
 }

@@ -16,6 +16,7 @@ import { promisify } from 'util';
 import * as path from 'path';
 import { Pool } from 'pg';
 import { TenantDatabaseService } from '../common/services/tenant-database.service';
+import { GoogleSheetsService } from '../common/services/google-sheets.service';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -28,6 +29,7 @@ export class DealerService {
     private prisma: PrismaService,
     private configService: ConfigService,
     private tenantDb: TenantDatabaseService,
+    private googleSheetsService: GoogleSheetsService,
   ) {}
 
   async create(createDealerDto: CreateDealerDto, createdById: string) {
@@ -50,46 +52,67 @@ export class DealerService {
     }
 
     // 2. Create Dealer in Master DB
-    const dealer = await this.prisma.dealer.create({
-      data: {
-        businessNameLegal: createDealerDto.legalName,
-        businessNameTrading: createDealerDto.tradingName,
-        businessAddress: createDealerDto.businessAddress,
-        contactPersonName: createDealerDto.contactPersonName,
-        phone: createDealerDto.phone,
-        email: createDealerDto.email,
-        dealerLicenseNumber: createDealerDto.dealerLicenseNumber,
-        businessRegistrationNumber: createDealerDto.businessRegistrationNumber,
-        bankDetails: createDealerDto.bankDetails
-          ? JSON.stringify(createDealerDto.bankDetails)
-          : null,
-        authorizedSignatory: createDealerDto.authorizedSignatory
-          ? JSON.stringify(createDealerDto.authorizedSignatory)
-          : null,
-        dealerAgreementSigned: createDealerDto.dealerAgreementSigned || false,
-        onboardingDate: createDealerDto.onboardingDate
-          ? new Date(createDealerDto.onboardingDate)
-          : new Date(),
-        password: createDealerDto.password, // Storing plain text as per legacy req (careful!)
-        status: 'active',
-        createdById,
-      },
-    });
+    let dealer: any = null;
+    let databaseCreated = false;
+    let dbUserCreated = false;
+    let tablesCreated = false;
+    let dealerInTenantCreated = false;
+    let userCreated = false;
+    let tenantMappingCreated = false;
 
     try {
-      // 3. Generate DB Name and Create Tenant DB
+      dealer = await this.prisma.dealer.create({
+        data: {
+          businessNameLegal: createDealerDto.legalName,
+          businessNameTrading: createDealerDto.tradingName,
+          businessAddress: createDealerDto.businessAddress,
+          contactPersonName: createDealerDto.contactPersonName,
+          phone: createDealerDto.phone,
+          email: createDealerDto.email,
+          dealerLicenseNumber: createDealerDto.dealerLicenseNumber,
+          businessRegistrationNumber:
+            createDealerDto.businessRegistrationNumber,
+          bankDetails: createDealerDto.bankDetails
+            ? JSON.stringify(createDealerDto.bankDetails)
+            : null,
+          authorizedSignatory: createDealerDto.authorizedSignatory
+            ? JSON.stringify(createDealerDto.authorizedSignatory)
+            : null,
+          dealerAgreementSigned: createDealerDto.dealerAgreementSigned || false,
+          onboardingDate: createDealerDto.onboardingDate
+            ? new Date(createDealerDto.onboardingDate)
+            : new Date(),
+          password: createDealerDto.password, // Storing plain text as per legacy req (careful!)
+          status: 'active',
+          createdById,
+        },
+      });
+
+      // 3. Generate DB Name and Create Tenant DB (owned by master user)
       const databaseName = await this.generateDatabaseName(dealer.id);
       const connectionString = this.buildConnectionString(databaseName);
+      const dbPassword = this.generatePassword(8); // 8-character password
+      const dbUsername = `user_${dealer.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
-      await this.createTenantDatabase(databaseName);
+      await this.createTenantDatabaseAsOwner(databaseName);
+      databaseCreated = true;
       this.logger.log(`Database ${databaseName} created successfully`);
+
+      // 3.5. Create restricted database user
+      await this.createRestrictedUser(databaseName, dbUsername, dbPassword);
+      dbUserCreated = true;
+      this.logger.log(
+        `Restricted user ${dbUsername} created for ${databaseName}`,
+      );
 
       // 4. Create Tenant Tables
       await this.createTenantTables(connectionString);
+      tablesCreated = true;
       this.logger.log(`Tenant tables created for ${databaseName}`);
 
       // 5. Create Dealer Record in Tenant DB
       await this.createDealerInTenant(dealer, connectionString, databaseName);
+      dealerInTenantCreated = true;
 
       // 6. Create User Account
       const saltRounds = parseInt(
@@ -124,14 +147,17 @@ export class DealerService {
           mustChangePassword: true,
         },
       });
+      userCreated = true;
 
-      // 7. Update Dealer with DB Info
+      // 7. Update Dealer with DB Info and credentials
       const updatedDealer = await this.prisma.dealer.update({
         where: { id: dealer.id },
         data: {
           databaseName,
           databaseUrl: connectionString,
           username: dealer.email,
+          databaseUsername: dbUsername,
+          databasePassword: dbPassword, // Consider encrypting this
           credentialsGeneratedAt: new Date(),
         },
       });
@@ -145,9 +171,17 @@ export class DealerService {
           status: 'active',
         },
       });
+      tenantMappingCreated = true;
 
-      // Simplified return (omitting Excel generation for now as it wasn't strictly requested to be ported, avoiding complexity)
-      // If Excel is needed, we can add it later.
+      // 9. Log to Google Sheets
+      await this.googleSheetsService.logDealerCredentials({
+        dealerName: dealer.businessNameLegal,
+        databaseName,
+        username: dbUsername,
+        password: dbPassword,
+        createdDate: new Date(),
+        status: 'active',
+      });
 
       return {
         message: 'Dealer created successfully',
@@ -157,6 +191,8 @@ export class DealerService {
           username: dealer.email,
           password: createDealerDto.password,
           databaseName,
+          databaseUsername: dbUsername,
+          databasePassword: dbPassword,
           excelFile: {
             path: '',
             filename: 'credentials_not_generated.xlsx',
@@ -165,10 +201,54 @@ export class DealerService {
       };
     } catch (error) {
       this.logger.error('Error creating dealer, rolling back...', error.stack);
-      // Rollback
-      await this.prisma.dealer
-        .delete({ where: { id: dealer.id } })
-        .catch((e) => this.logger.error('Rollback failed', e));
+
+      // ROLLBACK in reverse order
+      if (tenantMappingCreated && dealer) {
+        await this.prisma.tenantDatabaseMapping
+          .deleteMany({ where: { dealerId: dealer.id } })
+          .catch((e) =>
+            this.logger.error('Failed to delete tenant mapping', e),
+          );
+      }
+
+      if (userCreated && dealer) {
+        await this.prisma.user
+          .deleteMany({ where: { email: dealer.email } })
+          .catch((e) => this.logger.error('Failed to delete user', e));
+      }
+
+      if (dealerInTenantCreated && databaseCreated) {
+        // Dealer record in tenant DB will be deleted with database
+      }
+
+      if (tablesCreated) {
+        // Tables are part of database, will be deleted with DB
+      }
+
+      if (dbUserCreated && dealer) {
+        const dbUsername = `user_${dealer.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        await this.dropDatabaseUser(dbUsername).catch((e) =>
+          this.logger.error('Failed to drop user', e),
+        );
+      }
+
+      if (databaseCreated && dealer) {
+        try {
+          const databaseName = await this.generateDatabaseName(dealer.id);
+          await this.dropDatabase(databaseName).catch((e) =>
+            this.logger.error('Failed to drop database', e),
+          );
+        } catch (e) {
+          this.logger.error('Failed to generate database name for rollback', e);
+        }
+      }
+
+      if (dealer) {
+        await this.prisma.dealer
+          .delete({ where: { id: dealer.id } })
+          .catch((e) => this.logger.error('Failed to delete dealer record', e));
+      }
+
       throw new InternalServerErrorException(
         `Failed to create dealer: ${error.message}`,
       );
@@ -358,6 +438,47 @@ export class DealerService {
 
   // --- Private Helpers ---
 
+  /**
+   * Create master database user (one-time setup)
+   * This should be run once during initial setup
+   * @param masterPassword - Password for the master user
+   */
+  async createMasterDatabaseUser(masterPassword: string) {
+    const masterUser =
+      this.configService.get<string>('DB_MASTER_USER') || 'dealer_master';
+    const pool = await this.getPostgresConnection();
+    const client = await pool.connect();
+    try {
+      // Check if user already exists
+      const res = await client.query(
+        `SELECT 1 FROM pg_user WHERE usename = $1`,
+        [masterUser],
+      );
+      if (res.rowCount > 0) {
+        this.logger.warn(`Master user ${masterUser} already exists`);
+        return { success: true, message: 'Master user already exists' };
+      }
+
+      // Create master user with CREATEDB privilege
+      await client.query(
+        `CREATE USER "${masterUser}" WITH PASSWORD $1 CREATEDB`,
+        [masterPassword],
+      );
+      this.logger.log(
+        `Master database user ${masterUser} created successfully`,
+      );
+      return { success: true, message: `Master user ${masterUser} created` };
+    } catch (error) {
+      this.logger.error('Failed to create master database user', error);
+      throw new InternalServerErrorException(
+        `Failed to create master database user: ${error.message}`,
+      );
+    } finally {
+      client.release();
+      await pool.end();
+    }
+  }
+
   private async generateDatabaseName(dealerId: string): Promise<string> {
     const sanitized = dealerId.replace(/[^a-zA-Z0-9_]/g, '_');
     return `dealer_${sanitized}`;
@@ -385,6 +506,27 @@ export class DealerService {
     return new Pool({ connectionString: url.toString() });
   }
 
+  /**
+   * Get the master database user from DATABASE_URL
+   */
+  private getMasterDatabaseUser(): string {
+    const masterUser = this.configService.get<string>('DB_MASTER_USER');
+    if (masterUser) {
+      return masterUser;
+    }
+
+    // Extract username from DATABASE_URL if not specified
+    const dbUrl = this.configService.get<string>('DATABASE_URL') || '';
+    try {
+      const url = new URL(dbUrl);
+      return url.username || 'postgres'; // Default to postgres if no username in URL
+    } catch (e) {
+      // Fallback: try to extract from connection string format
+      const match = dbUrl.match(/:\/\/([^:]+):/);
+      return match ? match[1] : 'postgres';
+    }
+  }
+
   private async createTenantDatabase(databaseName: string) {
     const pool = await this.getPostgresConnection();
     const client = await pool.connect();
@@ -400,6 +542,180 @@ export class DealerService {
 
       // Create
       await client.query(`CREATE DATABASE "${sanitized}"`);
+    } finally {
+      client.release();
+      await pool.end();
+    }
+  }
+
+  /**
+   * Create tenant database owned by master user
+   */
+  private async createTenantDatabaseAsOwner(databaseName: string) {
+    const pool = await this.getPostgresConnection();
+    const client = await pool.connect();
+    try {
+      const sanitized = databaseName.replace(/[^a-zA-Z0-9_]/g, '');
+      const masterUser = this.getMasterDatabaseUser();
+
+      // Check if database exists
+      const res = await client.query(
+        `SELECT 1 FROM pg_database WHERE datname = $1`,
+        [sanitized],
+      );
+      if (res.rowCount > 0)
+        throw new Error(`Database ${sanitized} already exists`);
+
+      // Create database owned by master user (from DATABASE_URL)
+      await client.query(
+        `CREATE DATABASE "${sanitized}" OWNER "${masterUser}"`,
+      );
+      this.logger.log(`Database ${sanitized} created with owner ${masterUser}`);
+    } finally {
+      client.release();
+      await pool.end();
+    }
+  }
+
+  /**
+   * Generate 8-character alphanumeric password
+   */
+  private generatePassword(length: number = 8): string {
+    const charset =
+      'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let password = '';
+    const randomBytes = crypto.randomBytes(length);
+    for (let i = 0; i < length; i++) {
+      password += charset[randomBytes[i] % charset.length];
+    }
+    return password;
+  }
+
+  /**
+   * Create restricted database user with CRUD + CREATE TABLE permissions
+   */
+  private async createRestrictedUser(
+    databaseName: string,
+    username: string,
+    password: string,
+  ) {
+    const pool = await this.getPostgresConnection();
+    const client = await pool.connect();
+    try {
+      const sanitizedDb = databaseName.replace(/[^a-zA-Z0-9_]/g, '');
+      const sanitizedUser = username.replace(/[^a-zA-Z0-9_]/g, '_');
+
+      // 1. Create user
+      // Note: PostgreSQL doesn't support parameterized queries for CREATE USER
+      // We need to escape single quotes in the password
+      const escapedPassword = password.replace(/'/g, "''");
+      await client.query(
+        `CREATE USER "${sanitizedUser}" WITH PASSWORD '${escapedPassword}'`,
+      );
+
+      // 2. Grant connect permission
+      await client.query(
+        `GRANT CONNECT ON DATABASE "${sanitizedDb}" TO "${sanitizedUser}"`,
+      );
+
+      // 3. Connect to the dealer database to grant schema permissions
+      // We need to use a new connection for this
+      const dbUrl = this.configService.get<string>('DATABASE_URL') || '';
+      const url = new URL(dbUrl);
+      url.pathname = `/${sanitizedDb}`;
+      const dbPool = new Pool({ connectionString: url.toString() });
+      const dbClient = await dbPool.connect();
+
+      try {
+        // 4. Grant schema usage
+        await dbClient.query(
+          `GRANT USAGE ON SCHEMA public TO "${sanitizedUser}"`,
+        );
+
+        // 5. Grant CRUD + CREATE TABLE permissions on existing tables
+        await dbClient.query(
+          `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${sanitizedUser}"`,
+        );
+
+        // 6. Grant CREATE permission on schema (allows CREATE TABLE)
+        await dbClient.query(
+          `GRANT CREATE ON SCHEMA public TO "${sanitizedUser}"`,
+        );
+
+        // 7. Grant sequence permissions
+        await dbClient.query(
+          `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO "${sanitizedUser}"`,
+        );
+
+        // 8. Set default privileges for future tables
+        await dbClient.query(`
+          ALTER DEFAULT PRIVILEGES IN SCHEMA public 
+          GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "${sanitizedUser}"
+        `);
+
+        await dbClient.query(`
+          ALTER DEFAULT PRIVILEGES IN SCHEMA public 
+          GRANT USAGE, SELECT ON SEQUENCES TO "${sanitizedUser}"
+        `);
+
+        this.logger.log(
+          `Restricted user ${sanitizedUser} created with permissions for ${sanitizedDb}`,
+        );
+      } finally {
+        dbClient.release();
+        await dbPool.end();
+      }
+    } finally {
+      client.release();
+      await pool.end();
+    }
+  }
+
+  /**
+   * Drop database user (for rollback)
+   */
+  private async dropDatabaseUser(username: string) {
+    const pool = await this.getPostgresConnection();
+    const client = await pool.connect();
+    try {
+      const sanitized = username.replace(/[^a-zA-Z0-9_]/g, '_');
+      await client.query(`DROP USER IF EXISTS "${sanitized}"`);
+      this.logger.log(`Dropped user ${sanitized}`);
+    } catch (error) {
+      this.logger.error(`Failed to drop user ${username}`, error);
+      throw error;
+    } finally {
+      client.release();
+      await pool.end();
+    }
+  }
+
+  /**
+   * Drop database (for rollback)
+   */
+  private async dropDatabase(databaseName: string) {
+    const pool = await this.getPostgresConnection();
+    const client = await pool.connect();
+    try {
+      const sanitized = databaseName.replace(/[^a-zA-Z0-9_]/g, '');
+
+      // Terminate all connections to the database first
+      await client.query(
+        `
+        SELECT pg_terminate_backend(pg_stat_activity.pid)
+        FROM pg_stat_activity
+        WHERE pg_stat_activity.datname = $1
+        AND pid <> pg_backend_pid()
+      `,
+        [sanitized],
+      );
+
+      // Drop the database
+      await client.query(`DROP DATABASE IF EXISTS "${sanitized}"`);
+      this.logger.log(`Dropped database ${sanitized}`);
+    } catch (error) {
+      this.logger.error(`Failed to drop database ${databaseName}`, error);
+      throw error;
     } finally {
       client.release();
       await pool.end();

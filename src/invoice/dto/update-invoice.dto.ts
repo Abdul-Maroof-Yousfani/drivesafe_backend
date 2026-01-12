@@ -3,7 +3,6 @@ import {
   IsString,
   IsEnum,
   IsDateString,
-  IsUUID,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -33,6 +32,6 @@ export class UpdateInvoiceDto {
 
   @ApiPropertyOptional({ description: 'Dealer ID (Override for SA)' })
   @IsOptional()
-  @IsUUID()
+  @IsString()
   dealerId?: string;
 }

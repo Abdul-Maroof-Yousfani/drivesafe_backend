@@ -1,7 +1,7 @@
 // Tenant database mapping and management
 
 model TenantDatabaseMapping {
-  id                    String   @id @default(uuid())
+  id                    String   @id @default(cuid())
   dealerId              String   @unique
   dealer                Dealer   @relation("DealerTenantMapping", fields: [dealerId], references: [id], onDelete: Cascade)
   databaseName          String   @unique  // Database name (e.g., dealer_abc123)

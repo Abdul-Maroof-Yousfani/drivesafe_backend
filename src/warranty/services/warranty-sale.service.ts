@@ -782,13 +782,12 @@ export class WarrantySaleService {
     }
 
     // Check tenant DBs
-    const dealers = await this.prisma.dealer.findMany({
+    // Note: Dealer's customers are in tenant DB, not master DB
+    // So we need to check all active dealers and then check their tenant DBs
+    const allDealers = await this.prisma.dealer.findMany({
       where: {
         status: 'active',
         databaseName: { not: null },
-        customers: {
-          some: { email },
-        },
       },
       select: {
         id: true,
@@ -799,7 +798,7 @@ export class WarrantySaleService {
       },
     });
 
-    for (const dealer of dealers) {
+    for (const dealer of allDealers) {
       try {
         const tenantPrisma = await this.tenantDb.getTenantPrismaByDealerId(
           dealer.id,

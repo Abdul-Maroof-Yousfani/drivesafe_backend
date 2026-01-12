@@ -39,7 +39,7 @@ export class CustomerController {
   }
 
   @Get()
-  @Roles('admin', 'super_admin', 'dealer')
+  @Roles('admin', 'super_admin', 'dealer', 'customer')
   @ApiOperation({ summary: 'Get all customers' })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
@@ -61,28 +61,28 @@ export class CustomerController {
   }
 
   @Get(':id')
-  @Roles('admin', 'super_admin', 'dealer')
+  @Roles('admin', 'super_admin', 'dealer', 'customer')
   @ApiOperation({ summary: 'Get a customer by id' })
   findOne(@Param('id') id: string, @Req() req: any) {
     return this.customerService.findOne(id, req.user);
   }
 
   @Put(':id')
-  @Roles('admin', 'super_admin', 'dealer')
+  @Roles('admin', 'super_admin', 'dealer', 'customer')
   @ApiOperation({ summary: 'Update a customer' })
   update(@Param('id') id: string, @Body() updateData: any, @Req() req: any) {
     return this.customerService.update(id, updateData, req.user);
   }
 
   @Delete(':id')
-  @Roles('admin', 'super_admin', 'dealer')
+  @Roles('admin', 'super_admin', 'dealer', 'customer')
   @ApiOperation({ summary: 'Delete a customer' })
   remove(@Param('id') id: string, @Req() req: any) {
     return this.customerService.remove(id, req.user);
   }
 
   @Post(':customerId/vehicles')
-  @Roles('admin', 'super_admin', 'dealer')
+  @Roles('admin', 'super_admin', 'dealer', 'customer')
   @ApiOperation({ summary: 'Add a vehicle to a customer' })
   addVehicle(
     @Param('customerId') customerId: string,
@@ -97,7 +97,7 @@ export class CustomerController {
   }
 
   @Put('vehicles/:vehicleId')
-  @Roles('admin', 'super_admin', 'dealer')
+  @Roles('admin', 'super_admin', 'dealer', 'customer')
   @ApiOperation({ summary: 'Update a vehicle' })
   updateVehicle(
     @Param('vehicleId') vehicleId: string,
@@ -112,7 +112,7 @@ export class CustomerController {
   }
 
   @Delete('vehicles/:vehicleId')
-  @Roles('admin', 'super_admin', 'dealer')
+  @Roles('admin', 'super_admin', 'dealer', 'customer')
   @ApiOperation({ summary: 'Delete a vehicle' })
   deleteVehicle(@Param('vehicleId') vehicleId: string, @Req() req: any) {
     return this.customerService.deleteVehicle(vehicleId, req.user);

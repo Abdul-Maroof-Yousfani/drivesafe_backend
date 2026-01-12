@@ -1,7 +1,7 @@
 // Warranty Portal models
 
 model Customer {
-  id                String   @id @default(uuid())
+  id                String   @id @default(cuid())
   firstName         String
   lastName          String
   email             String
@@ -31,7 +31,7 @@ model Customer {
 }
 
 model Dealer {
-  id                      String   @id @default(uuid())
+  id                      String   @id @default(cuid())
   businessNameLegal      String
   businessNameTrading    String?
   businessAddress         String
@@ -51,6 +51,8 @@ model Dealer {
   databaseName            String?   @unique  // Name of dealer's database (e.g., dealer_abc123)
   databaseUrl             String?            // Full connection string for dealer database
   username                String?            // Auto-generated username for dealer login
+  databaseUsername        String?            // Restricted DB user for dealer database
+  databasePassword        String?            // Restricted DB user password (encrypted at rest)
   credentialsGeneratedAt  DateTime?          // Timestamp when credentials were generated
   excelFilePath           String?            // Path to Excel file containing credentials
   
@@ -72,7 +74,7 @@ model Dealer {
 }
 
 model InvoiceTemplate {
-  id              String   @id @default(uuid())
+  id              String   @id @default(cuid())
   // Relation to Dealer (if null, it is the Master/SA template)
   dealerId        String?  @unique
   dealer          Dealer?  @relation(fields: [dealerId], references: [id], onDelete: Cascade)
@@ -117,11 +119,15 @@ model InvoiceTemplate {
 }
 
 model WarrantyPackage {
-  id                String   @id @default(uuid())
+  id                String   @id @default(cuid())
   name              String
   description       String?
   planLevel         String?
   eligibility       String?
+  eligibilityMileageComparator String?
+  eligibilityMileageValue      Int?
+  eligibilityVehicleAgeYearsMax Int?
+  eligibilityTransmission      String?
   excess            Decimal?
   labourRatePerHour Decimal?
   fixedClaimLimit   Decimal?
@@ -142,6 +148,10 @@ model WarrantyPackage {
   context           String   @default("drive_safe")
   /// Base price (required for drive_safe context, optional otherwise)
   price             Decimal?
+  /// Whether this is a preset template (Silver, Gold, Platinum, etc.)
+  isPreset          Boolean  @default(false)
+  /// Preset type: "silver" | "gold" | "platinum" | null (for custom packages)
+  presetType        String?
   status            String    @default("active")
   createdById       String?
   createdBy         User?     @relation("WarrantyPackageCreatedBy", fields: [createdById], references: [id])
@@ -150,10 +160,13 @@ model WarrantyPackage {
   
   warrantySales     WarrantySale[]
   items             WarrantyPackageItem[]
+  
+  @@index([isPreset])
+  @@index([presetType])
 }
 
 model WarrantyPackageItem {
-  id                String          @id @default(uuid())
+  id                String          @id @default(cuid())
   warrantyPackageId String
   warrantyPackage   WarrantyPackage @relation(fields: [warrantyPackageId], references: [id], onDelete: Cascade)
   warrantyItemId    String
@@ -166,7 +179,7 @@ model WarrantyPackageItem {
 }
 
 model WarrantySale {
-  id                      String        @id @default(uuid())
+  id                      String        @id @default(cuid())
   customerId              String?
   customer                Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
   dealerId                String?
@@ -212,7 +225,7 @@ model WarrantySale {
 }
 
 model Invoice {
-  id              String       @id @default(uuid())
+  id              String       @id @default(cuid())
   invoiceNumber   String       @unique
   warrantySaleId  String
   warrantySale    WarrantySale @relation(fields: [warrantySaleId], references: [id], onDelete: Cascade)
@@ -239,7 +252,7 @@ model Invoice {
 }
 
 model CustomerVehicle {
-  id                 String   @id @default(uuid())
+  id                 String   @id @default(cuid())
   customerId         String
   customer           Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   make               String
@@ -248,6 +261,7 @@ model CustomerVehicle {
   vin                String?
   registrationNumber String?
   mileage            Int      @default(0)
+  transmission       String?
   status             String   @default("active")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -259,7 +273,7 @@ model CustomerVehicle {
 }
 
 model WarrantyItem {
-  id        String   @id @default(uuid())
+  id        String   @id @default(cuid())
   label     String
   type      String   @default("benefit")
   status    String   @default("active")
@@ -272,7 +286,7 @@ model WarrantyItem {
 }
 
 model DealerStorage {
-  id              String   @id @default(uuid())
+  id              String   @id @default(cuid())
   dealerId        String   @unique
   dealer          Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
   usedBytes       BigInt   @default(0)
@@ -283,4 +297,3 @@ model DealerStorage {
   
   @@index([dealerId])
 }
-

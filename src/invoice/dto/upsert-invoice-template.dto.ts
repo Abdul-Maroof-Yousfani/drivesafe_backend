@@ -2,7 +2,6 @@ import {
   IsString,
   IsOptional,
   IsNumber,
-  IsUUID,
   IsHexColor,
   Matches,
 } from 'class-validator';
@@ -159,6 +158,6 @@ export class UpsertInvoiceTemplateDto {
 
   @ApiPropertyOptional({ description: 'Dealer ID (Override for SA)' })
   @IsOptional()
-  @IsUUID()
+  @IsString()
   dealerId?: string;
 }

@@ -34,6 +34,10 @@ export class WarrantyPackageService {
       description,
       planLevel,
       eligibility,
+      eligibilityMileageComparator,
+      eligibilityMileageValue,
+      eligibilityVehicleAgeYearsMax,
+      eligibilityTransmission,
       excess,
       labourRatePerHour,
       fixedClaimLimit,
@@ -72,6 +76,18 @@ export class WarrantyPackageService {
     const coverageDurationMonths =
       normalizedDurationUnit === 'years' ? durationVal * 12 : durationVal;
 
+    const mileageComparatorProvided =
+      eligibilityMileageComparator !== undefined &&
+      eligibilityMileageComparator !== null;
+    const mileageValueProvided =
+      eligibilityMileageValue !== undefined && eligibilityMileageValue !== null;
+
+    if (mileageComparatorProvided !== mileageValueProvided) {
+      throw new BadRequestException(
+        'Mileage eligibility requires both comparator and value',
+      );
+    }
+
     // Create the package
     const pkg = await this.prisma.warrantyPackage.create({
       data: {
@@ -79,6 +95,14 @@ export class WarrantyPackageService {
         description: description?.trim() || null,
         planLevel: planLevel?.trim() || null,
         eligibility: eligibility?.trim() || null,
+        eligibilityMileageComparator: mileageComparatorProvided
+          ? eligibilityMileageComparator
+          : null,
+        eligibilityMileageValue: mileageValueProvided
+          ? eligibilityMileageValue
+          : null,
+        eligibilityVehicleAgeYearsMax: eligibilityVehicleAgeYearsMax ?? null,
+        eligibilityTransmission: eligibilityTransmission ?? null,
         excess: excess ?? null,
         labourRatePerHour: labourRatePerHour ?? null,
         fixedClaimLimit: fixedClaimLimit ?? null,
@@ -90,6 +114,8 @@ export class WarrantyPackageService {
         durationUnit: normalizedDurationUnit,
         context,
         price: price ?? null,
+        isPreset: dto.isPreset ?? false,
+        presetType: dto.presetType || null,
         status: 'active',
         createdById: userId || null,
       },
@@ -121,10 +147,18 @@ export class WarrantyPackageService {
   /**
    * Get all warranty packages
    */
-  async findAll(context?: string, dealerId?: string): Promise<any[]> {
+  async findAll(
+    context?: string,
+    dealerId?: string,
+    includePresets?: boolean,
+  ): Promise<any[]> {
     const where: any = {};
     if (context) {
       where.context = context;
+    }
+    // If includePresets is false, exclude presets
+    if (includePresets === false) {
+      where.isPreset = false;
     }
 
     const client = dealerId
@@ -142,6 +176,122 @@ export class WarrantyPackageService {
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  /**
+   * Get all preset packages
+   */
+  async findPresets(): Promise<any[]> {
+    return this.prisma.warrantyPackage.findMany({
+      where: {
+        isPreset: true,
+        status: 'active',
+      },
+      include: {
+        items: {
+          include: {
+            warrantyItem: true,
+          },
+        },
+      },
+      orderBy: [
+        { presetType: 'asc' },
+        { createdAt: 'desc' },
+      ],
+    });
+  }
+
+  /**
+   * Create package from preset with customizable benefits
+   */
+  async createFromPreset(
+    presetId: string,
+    dto: {
+      name: string;
+      keyBenefits?: string[];
+      includedFeatures?: string[];
+      dealerId?: string;
+      [key: string]: any;
+    },
+    userId: string,
+  ): Promise<any> {
+    // Get the preset
+    const preset = await this.prisma.warrantyPackage.findUnique({
+      where: { id: presetId },
+      include: {
+        items: {
+          include: {
+            warrantyItem: true,
+          },
+        },
+      },
+    });
+
+    if (!preset || !preset.isPreset) {
+      throw new NotFoundException('Preset not found');
+    }
+
+    // Create new package based on preset
+    const newPackage = await this.prisma.warrantyPackage.create({
+      data: {
+        name: dto.name.trim(),
+        description: preset.description,
+        planLevel: preset.planLevel,
+        eligibility: preset.eligibility,
+        eligibilityMileageComparator: preset.eligibilityMileageComparator,
+        eligibilityMileageValue: preset.eligibilityMileageValue,
+        eligibilityVehicleAgeYearsMax: preset.eligibilityVehicleAgeYearsMax,
+        eligibilityTransmission: preset.eligibilityTransmission,
+        excess: preset.excess,
+        labourRatePerHour: preset.labourRatePerHour,
+        fixedClaimLimit: preset.fixedClaimLimit,
+        price12Months: preset.price12Months,
+        price24Months: preset.price24Months,
+        price36Months: preset.price36Months,
+        dealerPrice12Months: preset.dealerPrice12Months,
+        dealerPrice24Months: preset.dealerPrice24Months,
+        dealerPrice36Months: preset.dealerPrice36Months,
+        coverageDuration: preset.coverageDuration,
+        durationValue: preset.durationValue,
+        durationUnit: preset.durationUnit,
+        context: preset.context,
+        price: preset.price,
+        isPreset: false, // New package is not a preset
+        presetType: null,
+        status: 'active',
+        createdById: userId || null,
+      },
+    });
+
+    // Use custom benefits if provided, otherwise use preset benefits
+    const keyBenefits =
+      dto.keyBenefits && dto.keyBenefits.length > 0
+        ? dto.keyBenefits
+        : preset.items
+            .filter((item) => item.type === 'benefit')
+            .map((item) => item.warrantyItemId);
+
+    const includedFeatures =
+      dto.includedFeatures && dto.includedFeatures.length > 0
+        ? dto.includedFeatures
+        : preset.items
+            .filter((item) => item.type === 'feature')
+            .map((item) => item.warrantyItemId);
+
+    // Create package items
+    if (keyBenefits.length > 0) {
+      await this.createPackageItems(newPackage.id, keyBenefits, 'benefit');
+    }
+
+    if (includedFeatures.length > 0) {
+      await this.createPackageItems(
+        newPackage.id,
+        includedFeatures,
+        'feature',
+      );
+    }
+
+    return this.findOne(newPackage.id);
   }
 
   /**
@@ -193,6 +343,10 @@ export class WarrantyPackageService {
       description,
       planLevel,
       eligibility,
+      eligibilityMileageComparator,
+      eligibilityMileageValue,
+      eligibilityVehicleAgeYearsMax,
+      eligibilityTransmission,
       excess,
       labourRatePerHour,
       fixedClaimLimit,
@@ -216,6 +370,26 @@ export class WarrantyPackageService {
     const coverageDurationMonths =
       normalizedUnit === 'years' ? durationVal * 12 : durationVal;
 
+    const nextMileageComparator =
+      eligibilityMileageComparator !== undefined
+        ? eligibilityMileageComparator
+        : existing.eligibilityMileageComparator;
+    const nextMileageValue =
+      eligibilityMileageValue !== undefined
+        ? eligibilityMileageValue
+        : existing.eligibilityMileageValue;
+
+    const nextMileageComparatorProvided =
+      nextMileageComparator !== undefined && nextMileageComparator !== null;
+    const nextMileageValueProvided =
+      nextMileageValue !== undefined && nextMileageValue !== null;
+
+    if (nextMileageComparatorProvided !== nextMileageValueProvided) {
+      throw new BadRequestException(
+        'Mileage eligibility requires both comparator and value',
+      );
+    }
+
     const updated = await this.prisma.warrantyPackage.update({
       where: { id },
       data: {
@@ -232,6 +406,22 @@ export class WarrantyPackageService {
           eligibility !== undefined
             ? eligibility?.trim() || null
             : existing.eligibility,
+        eligibilityMileageComparator:
+          eligibilityMileageComparator !== undefined
+            ? eligibilityMileageComparator
+            : existing.eligibilityMileageComparator,
+        eligibilityMileageValue:
+          eligibilityMileageValue !== undefined
+            ? eligibilityMileageValue
+            : existing.eligibilityMileageValue,
+        eligibilityVehicleAgeYearsMax:
+          eligibilityVehicleAgeYearsMax !== undefined
+            ? eligibilityVehicleAgeYearsMax
+            : existing.eligibilityVehicleAgeYearsMax,
+        eligibilityTransmission:
+          eligibilityTransmission !== undefined
+            ? eligibilityTransmission
+            : existing.eligibilityTransmission,
         excess: excess ?? existing.excess,
         labourRatePerHour: labourRatePerHour ?? existing.labourRatePerHour,
         fixedClaimLimit: fixedClaimLimit ?? existing.fixedClaimLimit,
@@ -372,6 +562,10 @@ export class WarrantyPackageService {
         description: masterPkg.description,
         planLevel: masterPkg.planLevel,
         eligibility: masterPkg.eligibility,
+        eligibilityMileageComparator: masterPkg.eligibilityMileageComparator,
+        eligibilityMileageValue: masterPkg.eligibilityMileageValue,
+        eligibilityVehicleAgeYearsMax: masterPkg.eligibilityVehicleAgeYearsMax,
+        eligibilityTransmission: masterPkg.eligibilityTransmission,
         excess: excess ?? masterPkg.excess,
         labourRatePerHour: labourRatePerHour ?? masterPkg.labourRatePerHour,
         fixedClaimLimit: fixedClaimLimit ?? masterPkg.fixedClaimLimit,
@@ -394,6 +588,10 @@ export class WarrantyPackageService {
         description: masterPkg.description,
         planLevel: masterPkg.planLevel,
         eligibility: masterPkg.eligibility,
+        eligibilityMileageComparator: masterPkg.eligibilityMileageComparator,
+        eligibilityMileageValue: masterPkg.eligibilityMileageValue,
+        eligibilityVehicleAgeYearsMax: masterPkg.eligibilityVehicleAgeYearsMax,
+        eligibilityTransmission: masterPkg.eligibilityTransmission,
         excess: excess ?? masterPkg.excess,
         labourRatePerHour: labourRatePerHour ?? masterPkg.labourRatePerHour,
         fixedClaimLimit: fixedClaimLimit ?? masterPkg.fixedClaimLimit,

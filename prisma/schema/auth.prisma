@@ -1,7 +1,7 @@
 // Authentication & Security models
 
 model User {
-  id                    String         @id @default(uuid())
+  id                    String         @id @default(cuid())
   email                 String         @unique
   password              String
   firstName             String
@@ -64,7 +64,7 @@ model User {
 }
 
 model Role {
-  id          String           @id @default(uuid())
+  id          String           @id @default(cuid())
   name        String           @unique
   description String?
   isSystem    Boolean          @default(false) // System roles can't be deleted
@@ -76,7 +76,7 @@ model Role {
 }
 
 model Permission {
-  id          String           @id @default(uuid())
+  id          String           @id @default(cuid())
   name        String           @unique // e.g., "employees.create", "employees.view"
   module      String           // e.g., "employees", "departments", "payroll"
   action      String           // e.g., "create", "read", "update", "delete"
@@ -87,7 +87,7 @@ model Permission {
 }
 
 model RolePermission {
-  id           String     @id @default(uuid())
+  id           String     @id @default(cuid())
   roleId       String
   permissionId String
   role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
@@ -97,7 +97,7 @@ model RolePermission {
 }
 
 model Session {
-  id             String   @id @default(uuid())
+  id             String   @id @default(cuid())
   userId         String
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   token          String   @unique
@@ -114,7 +114,7 @@ model Session {
 }
 
 model RefreshToken {
-  id        String   @id @default(uuid())
+  id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   token     String   @unique
@@ -128,7 +128,7 @@ model RefreshToken {
 }
 
 model ActivityLog {
-  id           String   @id @default(uuid())
+  id           String   @id @default(cuid())
   userId       String?
   user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   action       String   // login, logout, create, update, delete, etc.
@@ -152,7 +152,7 @@ model ActivityLog {
 }
 
 model LoginHistory {
-  id         String   @id @default(uuid())
+  id         String   @id @default(cuid())
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   ipAddress  String
@@ -167,7 +167,7 @@ model LoginHistory {
 }
 
 model BlacklistedToken {
-  id        String   @id @default(uuid())
+  id        String   @id @default(cuid())
   token     String   @unique
   reason    String?
   expiresAt DateTime

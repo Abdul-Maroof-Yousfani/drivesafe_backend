@@ -1,17 +1,9 @@
-import {
-  Controller,
-  Post,
-  Body,
-  Req,
-  UseGuards,
-  Get,
-  Ip,
-  Headers,
-} from '@nestjs/common';
+import { Controller, Post, Body, Req, UseGuards, Get, Put } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Throttle } from '@nestjs/throttler';
@@ -76,6 +68,28 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current user profile' })
   async getProfile(@Req() req: any) {
-    return req.user;
+    return this.authService.getUserProfile(req.user.userId);
+  }
+
+  @Put('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update current user profile' })
+  async updateProfile(@Body() updateDto: any, @Req() req: any) {
+    return this.authService.updateProfile(req.user.userId, updateDto);
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Change password' })
+  async changePassword(@Body() body: ChangePasswordDto, @Req() req: Request) {
+    const userId = (req as any).user?.userId;
+    const ipAddress =
+      (req.headers['x-forwarded-for'] as string) ||
+      req.socket.remoteAddress ||
+      '';
+    const userAgent = req.headers['user-agent'] || '';
+    return this.authService.changePassword(userId, body, ipAddress, userAgent);
   }
 }

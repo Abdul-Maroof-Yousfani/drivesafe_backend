@@ -1,7 +1,7 @@
 // Exit Clearance related models
 
 model ExitClearance {
-  id                      String   @id @default(uuid())
+  id                      String   @id @default(cuid())
   employeeName            String
   designation             String?
   department              String?

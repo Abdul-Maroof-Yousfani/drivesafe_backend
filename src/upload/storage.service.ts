@@ -33,6 +33,13 @@ export class StorageService {
   }
 
   /**
+   * Get the master storage path for super admin uploads
+   */
+  getMasterStoragePath(): string {
+    return path.join(process.cwd(), 'public', 'master');
+  }
+
+  /**
    * Get the subfolder path for a specific file category
    */
   getCategoryPath(dealerPath: string, category: string): string {

@@ -59,7 +59,7 @@ export class UploadController {
    * Upload a single file
    */
   @Post('single')
-  @Roles('dealer', 'super_admin')
+  @Roles('dealer', 'super_admin', 'admin')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -108,36 +108,49 @@ export class UploadController {
       throw new BadRequestException('No file provided');
     }
 
-    // Get dealer info
-    const dealerInfo = await this.getDealerInfo(req);
-    if (!dealerInfo) {
-      throw new BadRequestException(
-        'Dealer information not found. Only dealers can upload files.',
-      );
+    // For super_admin, allow uploads without dealer info (e.g., for logos)
+    // For dealers, require dealer info
+    const isSuperAdmin = req.user.role === 'super_admin';
+    let dealerInfo: { id: string; name: string } | null = null;
+    
+    if (!isSuperAdmin) {
+      dealerInfo = await this.getDealerInfo(req);
+      if (!dealerInfo) {
+        throw new BadRequestException(
+          'Dealer information not found. Only dealers can upload files.',
+        );
+      }
+
+      // Check storage limit for dealers
+      const storageCheck = await this.checkStorageLimit(dealerInfo.id, file.size);
+      if (!storageCheck.hasSpace) {
+        throw new PayloadTooLargeException({
+          status: false,
+          message: `Storage limit exceeded. You have used ${storageCheck.percentageUsed.toFixed(1)}% (${(Number(storageCheck.usedBytes) / (1024 * 1024 * 1024)).toFixed(2)} GB) of your 1GB limit.`,
+          storageInfo: {
+            used: Number(storageCheck.usedBytes) / (1024 * 1024 * 1024),
+            limit: Number(storageCheck.limitBytes) / (1024 * 1024 * 1024),
+            percentageUsed: storageCheck.percentageUsed,
+            available: Number(storageCheck.availableBytes) / (1024 * 1024 * 1024),
+          },
+        });
+      }
     }
 
-    // Check storage limit
-    const storageCheck = await this.checkStorageLimit(dealerInfo.id, file.size);
-    if (!storageCheck.hasSpace) {
-      throw new PayloadTooLargeException({
-        status: false,
-        message: `Storage limit exceeded. You have used ${storageCheck.percentageUsed.toFixed(1)}% (${(Number(storageCheck.usedBytes) / (1024 * 1024 * 1024)).toFixed(2)} GB) of your 1GB limit.`,
-        storageInfo: {
-          used: Number(storageCheck.usedBytes) / (1024 * 1024 * 1024),
-          limit: Number(storageCheck.limitBytes) / (1024 * 1024 * 1024),
-          percentageUsed: storageCheck.percentageUsed,
-          available: Number(storageCheck.availableBytes) / (1024 * 1024 * 1024),
-        },
-      });
-    }
-
-    const result = await this.uploadService.processUpload(
-      file,
-      dealerInfo.id,
-      dealerInfo.name,
-      req.user.sub,
-      category,
-    );
+    // For super_admin, use a master storage path
+    const result = isSuperAdmin
+      ? await this.uploadService.processUploadForSuperAdmin(
+          file,
+          req.user.sub,
+          category,
+        )
+      : await this.uploadService.processUpload(
+          file,
+          dealerInfo!.id,
+          dealerInfo!.name,
+          req.user.sub,
+          category,
+        );
 
     return {
       status: true,

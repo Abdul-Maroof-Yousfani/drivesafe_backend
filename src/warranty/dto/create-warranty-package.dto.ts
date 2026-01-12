@@ -38,6 +38,40 @@ export class CreateWarrantyPackageDto {
   @IsString()
   eligibility?: string;
 
+  @ApiPropertyOptional({
+    description: 'Mileage criteria comparator',
+    enum: ['gt', 'lt'],
+  })
+  @IsOptional()
+  @IsEnum(['gt', 'lt'])
+  eligibilityMileageComparator?: 'gt' | 'lt';
+
+  @ApiPropertyOptional({
+    description: 'Mileage criteria value (miles)',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  eligibilityMileageValue?: number;
+
+  @ApiPropertyOptional({
+    description: 'Maximum vehicle age in years',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  eligibilityVehicleAgeYearsMax?: number;
+
+  @ApiPropertyOptional({
+    description: 'Required transmission type',
+    enum: ['manual', 'automatic'],
+  })
+  @IsOptional()
+  @IsEnum(['manual', 'automatic'])
+  eligibilityTransmission?: 'manual' | 'automatic';
+
   @ApiPropertyOptional({ description: 'Excess amount' })
   @IsOptional()
   @Type(() => Number)
@@ -120,4 +154,19 @@ export class CreateWarrantyPackageDto {
   @IsArray()
   @IsString({ each: true })
   includedFeatures?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Whether this is a preset template',
+    default: false,
+  })
+  @IsOptional()
+  isPreset?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Preset type (silver, gold, platinum, etc.)',
+    enum: ['silver', 'gold', 'platinum'],
+  })
+  @IsOptional()
+  @IsEnum(['silver', 'gold', 'platinum'])
+  presetType?: 'silver' | 'gold' | 'platinum';
 }

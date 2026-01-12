@@ -37,7 +37,7 @@ async function bootstrap() {
       }
 
       // Production wildcard pattern (e.g., https://*.drivesafe.com)
-      const productionPattern = /^https:\/\/.*\.drivesafe\.com$/;
+      const productionPattern = /^https:\/\/.*\.drivesafewarranty.inplsoftwares\.com$/;
 
       // Development patterns
       const devPatterns = [

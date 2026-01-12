@@ -3,7 +3,6 @@ import {
   IsOptional,
   IsNumber,
   IsNotEmpty,
-  IsUUID,
   IsBoolean,
   IsDateString,
   Min,
@@ -13,23 +12,23 @@ import { Type } from 'class-transformer';
 
 export class CreateWarrantySaleDto {
   @ApiProperty({ description: 'Customer ID' })
-  @IsUUID()
+  @IsString()
   @IsNotEmpty()
   customerId: string;
 
   @ApiProperty({ description: 'Warranty Package ID' })
-  @IsUUID()
+  @IsString()
   @IsNotEmpty()
   warrantyPackageId: string;
 
   @ApiPropertyOptional({ description: 'Vehicle ID' })
   @IsOptional()
-  @IsUUID()
+  @IsString()
   vehicleId?: string;
 
   @ApiPropertyOptional({ description: 'Dealer ID' })
   @IsOptional()
-  @IsUUID()
+  @IsString()
   dealerId?: string;
 
   @ApiPropertyOptional({ description: 'Coverage duration in months' })

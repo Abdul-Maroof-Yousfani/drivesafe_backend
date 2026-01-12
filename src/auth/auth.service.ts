@@ -12,6 +12,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { Logger } from 'winston';
 import { ActivityLogService } from '../common/services/activity-log.service';
@@ -42,6 +43,24 @@ export class AuthService {
 
     if (!host) return;
 
+    // Skip portal validation for direct API requests (backend API calls)
+    // Only validate when the request is coming from a frontend portal
+    // API requests will have localhost:PORT (backend) or api.domain.com as host
+    // Frontend portals will have dealer.localhost:3003, customer.localhost:3003, etc.
+    
+    // Check if this is a backend API request (not a frontend portal request)
+    const backendPort = this.configService.get<string>('PORT') || '3004';
+    const backendHostPattern = new RegExp(`^(localhost|127\\.0\\.0\\.1):${backendPort}$`);
+    const isBackendApiRequest = 
+      backendHostPattern.test(host) || // Backend running on configured PORT
+      host.startsWith('api.');
+    
+    if (isBackendApiRequest) {
+      // Skip portal validation for direct backend API requests
+      return;
+    }
+
+    // Now check portal type based on subdomain
     let portalType = 'admin';
     if (host.startsWith('dealer.')) portalType = 'dealer';
     else if (host.startsWith('customer.')) portalType = 'customer';
@@ -408,6 +427,59 @@ export class AuthService {
     return { message: 'Logged out successfully' };
   }
 
+  async changePassword(
+    userId: string,
+    dto: ChangePasswordDto,
+    ipAddress: string,
+    userAgent: string,
+  ) {
+    if (!userId) throw new UnauthorizedException('Unauthorized');
+
+    const { currentPassword, newPassword, isFirstLogin } = dto;
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new BadRequestException('User not found');
+
+    const minLength = parseInt(
+      this.configService.get<string>('PASSWORD_MIN_LENGTH') || '8',
+    );
+    if (!newPassword || newPassword.length < minLength) {
+      throw new BadRequestException(
+        `Password must be at least ${minLength} characters`,
+      );
+    }
+
+    const skipCurrentPasswordCheck = Boolean(isFirstLogin && user.mustChangePassword);
+
+    if (!skipCurrentPasswordCheck) {
+      if (!currentPassword) {
+        throw new BadRequestException('Current password is required');
+      }
+      const isValid = await bcrypt.compare(currentPassword, user.password);
+      if (!isValid) {
+        throw new BadRequestException('Current password is incorrect');
+      }
+    }
+
+    const saltRounds = parseInt(
+      this.configService.get<string>('PASSWORD_SALT_ROUNDS') || '10',
+    );
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        password: hashedPassword,
+        passwordChangedAt: new Date(),
+        mustChangePassword: false,
+      },
+    });
+
+    await this.activityLogService.logPasswordChange(userId, ipAddress, userAgent);
+
+    return { status: true, message: 'Password changed successfully' };
+  }
+
   async getUserProfile(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -423,5 +495,123 @@ export class AuthService {
     const details = await this.getUserDetails(user);
 
     return { ...user, permissions, details };
+  }
+
+  async updateProfile(userId: string, updateDto: any) {
+    const {
+      firstName,
+      lastName,
+      phone,
+      avatar,
+      // Dealer-specific fields
+      businessNameLegal,
+      businessNameTrading,
+      businessAddress,
+      contactPersonName,
+      businessRegistrationNumber,
+      bankDetails,
+      authorizedSignatory,
+      // Customer-specific fields
+      address,
+      ...extraFields
+    } = updateDto;
+
+    // Get current user
+    const oldUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        role: { include: { permissions: { include: { permission: true } } } },
+      },
+    });
+
+    if (!oldUser) throw new BadRequestException('User not found');
+
+    // Update basic user fields
+    const userUpdateData: any = {};
+    if (firstName !== undefined) userUpdateData.firstName = firstName;
+    if (lastName !== undefined) userUpdateData.lastName = lastName;
+    if (phone !== undefined) userUpdateData.phone = phone;
+    if (avatar !== undefined) userUpdateData.avatar = avatar;
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: userUpdateData,
+      include: {
+        role: { include: { permissions: { include: { permission: true } } } },
+      },
+    });
+
+    // Update role-specific details
+    let details: any = null;
+    if (updatedUser.role?.name === 'dealer') {
+      const dealerUpdateData: any = {};
+      if (businessNameLegal !== undefined)
+        dealerUpdateData.businessNameLegal = businessNameLegal;
+      if (businessNameTrading !== undefined)
+        dealerUpdateData.businessNameTrading = businessNameTrading;
+      if (businessAddress !== undefined)
+        dealerUpdateData.businessAddress = businessAddress;
+      if (phone !== undefined) dealerUpdateData.phone = phone;
+      if (contactPersonName !== undefined)
+        dealerUpdateData.contactPersonName = contactPersonName;
+      if (businessRegistrationNumber !== undefined)
+        dealerUpdateData.businessRegistrationNumber =
+          businessRegistrationNumber;
+      if (bankDetails !== undefined)
+        dealerUpdateData.bankDetails =
+          typeof bankDetails === 'object'
+            ? JSON.stringify(bankDetails)
+            : bankDetails;
+      if (authorizedSignatory !== undefined)
+        dealerUpdateData.authorizedSignatory =
+          typeof authorizedSignatory === 'object'
+            ? JSON.stringify(authorizedSignatory)
+            : authorizedSignatory;
+
+      if (Object.keys(dealerUpdateData).length > 0) {
+        details = await this.prisma.dealer.update({
+          where: { email: updatedUser.email },
+          data: dealerUpdateData,
+        });
+      } else {
+        details = await this.prisma.dealer.findUnique({
+          where: { email: updatedUser.email },
+        });
+      }
+      details = this.parseDealerDetails(details);
+    } else if (updatedUser.role?.name === 'customer') {
+      const customerUpdateData: any = {};
+      if (address !== undefined) customerUpdateData.address = address;
+      if (phone !== undefined) customerUpdateData.phone = phone;
+      if (firstName !== undefined) customerUpdateData.firstName = firstName;
+      if (lastName !== undefined) customerUpdateData.lastName = lastName;
+
+      if (Object.keys(customerUpdateData).length > 0) {
+        const customer = await this.prisma.customer.findFirst({
+          where: { email: updatedUser.email },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (customer) {
+          details = await this.prisma.customer.update({
+            where: { id: customer.id },
+            data: customerUpdateData,
+          });
+        }
+      } else {
+        details = await this.prisma.customer.findFirst({
+          where: { email: updatedUser.email },
+          orderBy: { createdAt: 'desc' },
+        });
+      }
+    }
+
+    const permissions =
+      updatedUser.role?.permissions?.map((rp) => rp.permission.name) || [];
+
+    return {
+      status: true,
+      message: 'Profile updated successfully',
+      data: { ...updatedUser, permissions, details },
+    };
   }
 }

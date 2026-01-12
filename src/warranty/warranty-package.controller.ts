@@ -68,18 +68,65 @@ export class WarrantyPackageController {
     required: false,
     description: 'Filter by context',
   })
+  @ApiQuery({
+    name: 'includePresets',
+    required: false,
+    description: 'Include preset packages',
+    type: Boolean,
+  })
   async findAll(
     @Query('context') context: string | undefined,
+    @Query('includePresets') includePresets: string | undefined,
     @Req() req: RequestWithUser,
   ) {
     const dealerId = req.user.role === 'dealer' ? req.user.tenantId : undefined;
+    const includePresetsBool =
+      includePresets === 'true' ? true : includePresets === 'false' ? false : undefined;
     const packages = await this.warrantyPackageService.findAll(
       context,
       dealerId,
+      includePresetsBool,
     );
     return {
       status: true,
       data: packages,
+    };
+  }
+
+  @Get('presets')
+  @Roles('super_admin', 'admin')
+  @ApiOperation({ summary: 'Get all warranty plan presets' })
+  async getPresets() {
+    const presets = await this.warrantyPackageService.findPresets();
+    return {
+      status: true,
+      data: presets,
+    };
+  }
+
+  @Post('from-preset/:presetId')
+  @Roles('super_admin', 'admin')
+  @ApiOperation({ summary: 'Create warranty package from preset with customizable benefits' })
+  async createFromPreset(
+    @Param('presetId') presetId: string,
+    @Body() dto: {
+      name: string;
+      keyBenefits?: string[];
+      includedFeatures?: string[];
+      dealerId?: string;
+      [key: string]: any;
+    },
+    @Req() req: RequestWithUser,
+  ) {
+    const pkg = await this.warrantyPackageService.createFromPreset(
+      presetId,
+      dto,
+      req.user.userId,
+    );
+    return {
+      status: true,
+      message: 'Warranty package created from preset successfully',
+      data: pkg,
     };
   }
 

@@ -215,6 +215,11 @@ export class InvoiceService {
   async findOne(id: string, user: any, queryDealerId?: string): Promise<any> {
     let invoice;
 
+    // Customer role: Search across databases (similar to warranty sale service)
+    if (user.role === 'customer' && user.email) {
+      return this.findCustomerInvoiceById(id, user.email);
+    }
+
     // Determine strategy
     if (user.role === 'dealer' && user.dealerId) {
       // Dealer looking up their own invoice
@@ -287,6 +292,298 @@ export class InvoiceService {
     }
 
     return invoice;
+  }
+
+  /**
+   * Find customer invoice by ID (searches master and tenant DBs)
+   */
+  private async findCustomerInvoiceById(
+    id: string,
+    email: string,
+  ): Promise<any> {
+    this.logger.log(
+      `[findCustomerInvoiceById] Customer ${email} requesting invoice ${id}`,
+    );
+
+    // Check master DB first
+    const masterCustomers = await this.prisma.customer.findMany({
+      where: { email, dealerId: null },
+      select: { id: true },
+    });
+
+    this.logger.log(
+      `[findCustomerInvoiceById] Found ${masterCustomers.length} master customers`,
+    );
+
+    if (masterCustomers.length > 0) {
+      const customerIds = masterCustomers.map((c) => c.id);
+
+      // Fetch invoice from Master DB - verify through warranty sale
+      // IMPORTANT: Customers should NOT see dealer settlement invoices (dealerId is set)
+      // Customers only see invoices that are NOT dealer settlement invoices (dealerId is null)
+      // Try by invoice ID first, then by warrantySaleId (in case ID is actually a warranty sale ID)
+      let invoice = await this.prisma.invoice.findFirst({
+        where: {
+          id,
+          dealerId: null, // Exclude dealer settlement invoices - customers shouldn't see these
+        },
+        include: {
+          warrantySale: {
+            include: {
+              customer: true,
+              vehicle: true,
+              warrantyPackage: true,
+            },
+          },
+          dealer: true,
+          createdBy: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+      });
+
+      // If not found by invoice ID, try by warrantySaleId
+      if (!invoice) {
+        this.logger.log(
+          `[findCustomerInvoiceById] Master DB invoice not found by ID, trying by warrantySaleId: ${id}`,
+        );
+        invoice = await this.prisma.invoice.findFirst({
+          where: {
+            warrantySaleId: id,
+            dealerId: null, // Exclude dealer settlement invoices
+          },
+          include: {
+            warrantySale: {
+              include: {
+                customer: true,
+                vehicle: true,
+                warrantyPackage: true,
+              },
+            },
+            dealer: true,
+            createdBy: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+          },
+        });
+      }
+
+      this.logger.log(
+        `[findCustomerInvoiceById] Master DB invoice found: ${!!invoice}`,
+      );
+
+      // Verify the invoice's warranty sale belongs to this customer
+      if (
+        invoice &&
+        invoice.warrantySale &&
+        invoice.warrantySale.customerId &&
+        customerIds.includes(invoice.warrantySale.customerId)
+      ) {
+        this.logger.log(
+          `[findCustomerInvoiceById] Returning master DB invoice`,
+        );
+        return invoice;
+      }
+    }
+
+    // Check tenant DBs
+    // Note: Dealer's customers are in tenant DB, not master DB
+    // So we need to check all active dealers and then check their tenant DBs
+    const allDealers = await this.prisma.dealer.findMany({
+      where: {
+        status: 'active',
+        databaseName: { not: null },
+      },
+      select: {
+        id: true,
+        businessNameLegal: true,
+        businessNameTrading: true,
+        email: true,
+        phone: true,
+      },
+    });
+
+    this.logger.log(
+      `[findCustomerInvoiceById] Checking ${allDealers.length} active dealers`,
+    );
+
+    const dealers: Array<{
+      id: string;
+      businessNameLegal: string;
+      businessNameTrading: string | null;
+      email: string;
+      phone: string;
+    }> = [];
+
+    // Pre-filter dealers that have this customer in their tenant DB
+    for (const dealer of allDealers) {
+      try {
+        const tenantPrisma = await this.tenantDb.getTenantPrismaByDealerId(
+          dealer.id,
+        );
+        const customerExists = await tenantPrisma.customer.findFirst({
+          where: { email },
+          select: { id: true },
+        });
+        if (customerExists) {
+          dealers.push(dealer);
+        }
+      } catch (error) {
+        this.logger.warn(
+          `[findCustomerInvoiceById] Error checking dealer ${dealer.id} for customer: ${error.message}`,
+        );
+      }
+    }
+
+    this.logger.log(
+      `[findCustomerInvoiceById] Found ${dealers.length} dealers with this customer`,
+    );
+
+    for (const dealer of dealers) {
+      try {
+        this.logger.log(
+          `[findCustomerInvoiceById] Checking dealer ${dealer.id} (${dealer.businessNameTrading || dealer.businessNameLegal})`,
+        );
+
+        const tenantPrisma = await this.tenantDb.getTenantPrismaByDealerId(
+          dealer.id,
+        );
+        const customer = await tenantPrisma.customer.findFirst({
+          where: { email },
+          select: { id: true },
+        });
+
+        if (!customer) {
+          this.logger.warn(
+            `[findCustomerInvoiceById] Customer not found in dealer ${dealer.id} tenant DB`,
+          );
+          continue;
+        }
+
+        this.logger.log(
+          `[findCustomerInvoiceById] Customer found in dealer ${dealer.id} DB, customerId: ${customer.id}`,
+        );
+
+        // Fetch invoice from tenant DB - verify through warranty sale
+        // IMPORTANT: Customers should NOT see dealer settlement invoices (dealerId is set)
+        // Customers only see invoices that are NOT dealer settlement invoices (dealerId is null)
+        // Try by invoice ID first, then by warrantySaleId (in case ID is actually a warranty sale ID)
+        let invoice = await tenantPrisma.invoice.findFirst({
+          where: {
+            id,
+            dealerId: null, // Exclude dealer settlement invoices - customers shouldn't see these
+          },
+          include: {
+            warrantySale: {
+              include: {
+                customer: true,
+                vehicle: true,
+                warrantyPackage: true,
+              },
+            },
+          },
+        });
+
+        // If not found by invoice ID, try by warrantySaleId
+        if (!invoice) {
+          this.logger.log(
+            `[findCustomerInvoiceById] Invoice not found by ID, trying by warrantySaleId: ${id}`,
+          );
+          invoice = await tenantPrisma.invoice.findFirst({
+            where: {
+              warrantySaleId: id,
+              dealerId: null, // Exclude dealer settlement invoices
+            },
+            include: {
+              warrantySale: {
+                include: {
+                  customer: true,
+                  vehicle: true,
+                  warrantyPackage: true,
+                },
+              },
+            },
+          });
+        }
+
+        this.logger.log(
+          `[findCustomerInvoiceById] Invoice found in dealer ${dealer.id} DB: ${!!invoice}`,
+        );
+        if (invoice) {
+          this.logger.log(
+            `[findCustomerInvoiceById] Invoice warrantySale: ${!!invoice.warrantySale}, customerId: ${invoice.warrantySale?.customerId}, expected: ${customer.id}`,
+          );
+        }
+
+        // Verify the invoice's warranty sale belongs to this customer
+        if (
+          invoice &&
+          invoice.warrantySale &&
+          invoice.warrantySale.customerId === customer.id
+        ) {
+          this.logger.log(
+            `[findCustomerInvoiceById] Invoice verified, fetching dealer info`,
+          );
+
+          // Fetch dealer info from Master DB
+          const dealerInfo = await this.prisma.dealer.findUnique({
+            where: { id: dealer.id },
+            select: {
+              id: true,
+              businessNameLegal: true,
+              businessNameTrading: true,
+              businessAddress: true,
+              email: true,
+              phone: true,
+            },
+          });
+
+          this.logger.log(
+            `[findCustomerInvoiceById] Returning invoice from dealer ${dealer.id} DB`,
+          );
+          return {
+            ...invoice,
+            dealer: dealerInfo
+              ? {
+                  id: dealerInfo.id,
+                  businessNameLegal: dealerInfo.businessNameLegal,
+                  businessNameTrading: dealerInfo.businessNameTrading,
+                  businessAddress: dealerInfo.businessAddress,
+                  email: dealerInfo.email,
+                  phone: dealerInfo.phone,
+                }
+              : null,
+          };
+        } else if (invoice) {
+          this.logger.warn(
+            `[findCustomerInvoiceById] Invoice found but warranty sale customerId mismatch. Invoice warrantySale customerId: ${invoice.warrantySale?.customerId}, expected: ${customer.id}`,
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `Error checking dealer ${dealer.id}: ${error.message}`,
+          error.stack,
+        );
+      }
+    }
+
+    // If invoice not found, it might be that customer doesn't have an invoice record
+    // In that case, frontend will fetch warranty sale and show it as invoice
+    // This is expected behavior - customers may only have warranty sales, not invoice records
+    this.logger.log(
+      `[findCustomerInvoiceById] Invoice not found. This is expected if customer only has warranty sale record. Frontend will fetch warranty sale and display it as invoice.`,
+    );
+    throw new NotFoundException('Invoice not found');
   }
 
   /**

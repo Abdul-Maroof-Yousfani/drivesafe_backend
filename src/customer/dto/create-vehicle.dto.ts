@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, IsNumber } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsNumber, IsEnum } from 'class-validator';
 
 export class CreateVehicleDto {
   @IsString()
@@ -24,4 +24,8 @@ export class CreateVehicleDto {
   @IsNumber()
   @IsOptional()
   mileage?: number;
+
+  @IsOptional()
+  @IsEnum(['manual', 'automatic'])
+  transmission?: 'manual' | 'automatic';
 }

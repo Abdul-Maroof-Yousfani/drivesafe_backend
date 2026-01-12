@@ -3,7 +3,6 @@ import {
   IsOptional,
   IsNumber,
   IsNotEmpty,
-  IsUUID,
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -11,12 +10,12 @@ import { Type } from 'class-transformer';
 
 export class AssignPackageToDealerDto {
   @ApiProperty({ description: 'Dealer ID' })
-  @IsUUID()
+  @IsString()
   @IsNotEmpty()
   dealerId: string;
 
   @ApiProperty({ description: 'Warranty Package ID' })
-  @IsUUID()
+  @IsString()
   @IsNotEmpty()
   warrantyPackageId: string;
 

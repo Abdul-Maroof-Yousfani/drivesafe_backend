@@ -1,7 +1,7 @@
 // Master data models
 
 model Designation {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String   @unique
   status      String   @default("active")
   createdById String?
@@ -11,7 +11,7 @@ model Designation {
 }
 
 model JobType {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String   @unique
   status      String   @default("active")
   createdById String?
@@ -21,7 +21,7 @@ model JobType {
 }
 
 model Institute {
-  id             String          @id @default(uuid())
+  id             String          @id @default(cuid())
   name           String          @unique
   status         String          @default("active")
   createdById    String?
@@ -32,7 +32,7 @@ model Institute {
 }
 
 model Qualification {
-  id            String     @id @default(uuid())
+  id            String     @id @default(cuid())
   instituteId   String?
   institute     Institute? @relation(fields: [instituteId], references: [id], onDelete: SetNull)
   instituteName String
@@ -47,7 +47,7 @@ model Qualification {
 }
 
 model MaritalStatus {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String   @unique
   status      String   @default("active")
   createdById String?
@@ -57,7 +57,7 @@ model MaritalStatus {
 }
 
 model DegreeType {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String   @unique
   status      String   @default("active")
   createdById String?
@@ -67,7 +67,7 @@ model DegreeType {
 }
 
 model Country {
-  id        String   @id @default(uuid())
+  id        String   @id @default(cuid())
   name      String
   iso       String
   nicename  String
@@ -81,7 +81,7 @@ model Country {
 }
 
 model City {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String
   countryId   String
   country     Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
@@ -98,7 +98,7 @@ model City {
 }
 
 model State {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String
   countryId   String
   country     Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
@@ -111,7 +111,7 @@ model State {
 }
 
 model Branch {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String   @unique
   address     String?
   cityId      String?  @map("city_id")
@@ -124,7 +124,7 @@ model Branch {
   }
 
 model AllowanceHead {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String   @unique
   status      String   @default("active")
   createdById String?
@@ -134,7 +134,7 @@ model AllowanceHead {
 }
 
 model DeductionHead {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String   @unique
   status      String   @default("active")
   createdById String?
@@ -144,7 +144,7 @@ model DeductionHead {
 }
 
 model LoanType {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String   @unique
   status      String   @default("active")
   createdById String?
@@ -154,7 +154,7 @@ model LoanType {
 }
 
 model LeaveType {
-  id                      String                    @id @default(uuid())
+  id                      String                    @id @default(cuid())
   name                    String                    @unique
   status                  String                    @default("active")
   createdById             String?
@@ -165,7 +165,7 @@ model LeaveType {
 }
 
 model LeavesPolicy {
-  id                      String                    @id @default(uuid())
+  id                      String                    @id @default(cuid())
   name                    String                    @unique
   details                 String?
   policyDateFrom          DateTime?
@@ -182,7 +182,7 @@ model LeavesPolicy {
 }
 
 model LeavesPolicyLeaveType {
-  id             String        @id @default(uuid())
+  id             String        @id @default(cuid())
   leavesPolicyId String
   leavesPolicy   LeavesPolicy  @relation(fields: [leavesPolicyId], references: [id], onDelete: Cascade)
   leaveTypeId    String
@@ -195,7 +195,7 @@ model LeavesPolicyLeaveType {
 }
 
 model Equipment {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String   @unique
   status      String   @default("active")
   createdById String?
@@ -205,7 +205,7 @@ model Equipment {
 }
 
 model SalaryBreakup {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String   @unique
   details     String?
   status      String   @default("active")
@@ -216,7 +216,7 @@ model SalaryBreakup {
 }
 
 model TaxSlab {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String
   minAmount   Decimal
   maxAmount   Decimal
@@ -229,7 +229,7 @@ model TaxSlab {
 }
 
 model BonusType {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String   @unique
   status      String   @default("active")
   createdById String?
@@ -239,7 +239,7 @@ model BonusType {
 }
 
 model ApprovalSetting {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String
   levels      Int      @default(1)
   details     String?
@@ -253,7 +253,7 @@ model ApprovalSetting {
 // Department related models
 
 model Department {
-  id             String          @id @default(uuid())
+  id             String          @id @default(cuid())
   name           String          @unique
   createdById    String?
   createdBy      User?           @relation("DepartmentCreatedBy", fields: [createdById], references: [id])
@@ -263,7 +263,7 @@ model Department {
 }
 
 model SubDepartment {
-  id           String     @id @default(uuid())
+  id           String     @id @default(cuid())
   name         String
   departmentId String
   department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
@@ -276,7 +276,7 @@ model SubDepartment {
 }
 
 model EOBI {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String
   amount      Decimal
   yearMonth   String
@@ -288,7 +288,7 @@ model EOBI {
 }
 
 model EmployeeGrade {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   grade       String   @unique
   status      String   @default("active")
   createdById String?
@@ -298,7 +298,7 @@ model EmployeeGrade {
 }
 
 model EmployeeStatus {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   status      String   @unique
   statusType  String   @default("active")
   createdById String?
@@ -308,7 +308,7 @@ model EmployeeStatus {
 }
 
 model ProvidentFund {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String   @unique
   percentage  Decimal
   status      String   @default("active")
@@ -319,7 +319,7 @@ model ProvidentFund {
 }
 
 model WorkingHoursPolicy {
-  id                        String   @id @default(uuid())
+  id                        String   @id @default(cuid())
   name                      String   @unique
   startWorkingHours         String
   endWorkingHours           String
@@ -348,7 +348,7 @@ model WorkingHoursPolicy {
 }
 
 model FileUpload {
-  id               String   @id @default(uuid())
+  id               String   @id @default(cuid())
   filename         String
   originalFilename String?
   mimetype         String
