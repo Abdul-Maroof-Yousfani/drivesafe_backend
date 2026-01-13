@@ -114,8 +114,6 @@ export class WarrantyPackageService {
         durationUnit: normalizedDurationUnit,
         context,
         price: price ?? null,
-        isPreset: dto.isPreset ?? false,
-        presetType: dto.presetType || null,
         status: 'active',
         createdById: userId || null,
       },
@@ -176,122 +174,6 @@ export class WarrantyPackageService {
       },
       orderBy: { createdAt: 'desc' },
     });
-  }
-
-  /**
-   * Get all preset packages
-   */
-  async findPresets(): Promise<any[]> {
-    return this.prisma.warrantyPackage.findMany({
-      where: {
-        isPreset: true,
-        status: 'active',
-      },
-      include: {
-        items: {
-          include: {
-            warrantyItem: true,
-          },
-        },
-      },
-      orderBy: [
-        { presetType: 'asc' },
-        { createdAt: 'desc' },
-      ],
-    });
-  }
-
-  /**
-   * Create package from preset with customizable benefits
-   */
-  async createFromPreset(
-    presetId: string,
-    dto: {
-      name: string;
-      keyBenefits?: string[];
-      includedFeatures?: string[];
-      dealerId?: string;
-      [key: string]: any;
-    },
-    userId: string,
-  ): Promise<any> {
-    // Get the preset
-    const preset = await this.prisma.warrantyPackage.findUnique({
-      where: { id: presetId },
-      include: {
-        items: {
-          include: {
-            warrantyItem: true,
-          },
-        },
-      },
-    });
-
-    if (!preset || !preset.isPreset) {
-      throw new NotFoundException('Preset not found');
-    }
-
-    // Create new package based on preset
-    const newPackage = await this.prisma.warrantyPackage.create({
-      data: {
-        name: dto.name.trim(),
-        description: preset.description,
-        planLevel: preset.planLevel,
-        eligibility: preset.eligibility,
-        eligibilityMileageComparator: preset.eligibilityMileageComparator,
-        eligibilityMileageValue: preset.eligibilityMileageValue,
-        eligibilityVehicleAgeYearsMax: preset.eligibilityVehicleAgeYearsMax,
-        eligibilityTransmission: preset.eligibilityTransmission,
-        excess: preset.excess,
-        labourRatePerHour: preset.labourRatePerHour,
-        fixedClaimLimit: preset.fixedClaimLimit,
-        price12Months: preset.price12Months,
-        price24Months: preset.price24Months,
-        price36Months: preset.price36Months,
-        dealerPrice12Months: preset.dealerPrice12Months,
-        dealerPrice24Months: preset.dealerPrice24Months,
-        dealerPrice36Months: preset.dealerPrice36Months,
-        coverageDuration: preset.coverageDuration,
-        durationValue: preset.durationValue,
-        durationUnit: preset.durationUnit,
-        context: preset.context,
-        price: preset.price,
-        isPreset: false, // New package is not a preset
-        presetType: null,
-        status: 'active',
-        createdById: userId || null,
-      },
-    });
-
-    // Use custom benefits if provided, otherwise use preset benefits
-    const keyBenefits =
-      dto.keyBenefits && dto.keyBenefits.length > 0
-        ? dto.keyBenefits
-        : preset.items
-            .filter((item) => item.type === 'benefit')
-            .map((item) => item.warrantyItemId);
-
-    const includedFeatures =
-      dto.includedFeatures && dto.includedFeatures.length > 0
-        ? dto.includedFeatures
-        : preset.items
-            .filter((item) => item.type === 'feature')
-            .map((item) => item.warrantyItemId);
-
-    // Create package items
-    if (keyBenefits.length > 0) {
-      await this.createPackageItems(newPackage.id, keyBenefits, 'benefit');
-    }
-
-    if (includedFeatures.length > 0) {
-      await this.createPackageItems(
-        newPackage.id,
-        includedFeatures,
-        'feature',
-      );
-    }
-
-    return this.findOne(newPackage.id);
   }
 
   /**
@@ -519,6 +401,7 @@ export class WarrantyPackageService {
       dealerPrice12Months,
       dealerPrice24Months,
       dealerPrice36Months,
+      includedBenefits,
     } = dto;
 
     // Get dealer
@@ -714,6 +597,27 @@ export class WarrantyPackageService {
       },
     });
 
+    // Snapshot selected benefits for this assignment (use explicit list or all package benefits)
+    const benefitIdsToUse =
+      Array.isArray(includedBenefits) && includedBenefits.length > 0
+        ? includedBenefits
+        : masterPackageItems
+            .filter((item) => item.type === 'benefit')
+            .map((item) => item.warrantyItemId);
+
+    if (benefitIdsToUse.length > 0) {
+      await this.syncSaleBenefitsForAssignment(
+        this.prisma,
+        masterSale.id,
+        benefitIdsToUse,
+      );
+      await this.syncSaleBenefitsForAssignment(
+        tenantPrisma,
+        tenantSale.id,
+        benefitIdsToUse,
+      );
+    }
+
     // Create invoice record in master for the assignment
     if (warrantyPrice > 0) {
       try {
@@ -798,5 +702,40 @@ export class WarrantyPackageService {
         skipDuplicates: true,
       });
     }
+  }
+
+  /**
+   * Helper: snapshot benefits for dealer assignment sales
+   */
+  private async syncSaleBenefitsForAssignment(
+    client: any,
+    saleId: string,
+    benefitIds: string[],
+  ): Promise<void> {
+    if (!benefitIds.length) return;
+
+    await client.warrantySaleBenefit.deleteMany({
+      where: { warrantySaleId: saleId },
+    });
+
+    const items = await client.warrantyItem.findMany({
+      where: {
+        id: { in: benefitIds },
+        type: 'benefit',
+        status: 'active',
+      },
+      select: { id: true },
+    });
+
+    if (!items.length) return;
+
+    await client.warrantySaleBenefit.createMany({
+      data: items.map((item) => ({
+        warrantySaleId: saleId,
+        warrantyItemId: item.id,
+        type: 'benefit',
+      })),
+      skipDuplicates: true,
+    });
   }
 }

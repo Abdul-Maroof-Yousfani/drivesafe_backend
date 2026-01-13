@@ -16,6 +16,8 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { RolesModule } from './roles/roles.module';
+import { MailModule } from './mail/mail.module';
+import { DirectCustomerModule } from './direct-customer/direct-customer.module';
 
 @Module({
   imports: [
@@ -45,6 +47,8 @@ import { RolesModule } from './roles/roles.module';
     UploadModule,
     WarrantyModule,
     InvoiceModule,
+    MailModule,
+    DirectCustomerModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -123,6 +123,8 @@ model WarrantyPackage {
   name              String
   description       String?
   planLevel         String?
+  /// Optional reference key for dynamic plan levels (e.g. Silver, Gold)
+  // planLevel is kept as free text; dynamic plan levels are managed via WarrantyPlanLevel
   eligibility       String?
   eligibilityMileageComparator String?
   eligibilityMileageValue      Int?
@@ -163,6 +165,33 @@ model WarrantyPackage {
   
   @@index([isPreset])
   @@index([presetType])
+}
+
+/// Master definition of dynamic warranty plan levels (e.g. Silver, Gold, Platinum)
+model WarrantyPlanLevel {
+  id          String                     @id @default(cuid())
+  name        String                     @unique
+  description String?
+  status      String                     @default("active")
+  createdAt   DateTime                   @default(now())
+  updatedAt   DateTime                   @updatedAt
+
+  benefits    WarrantyPlanLevelBenefit[]
+
+  @@index([status])
+}
+
+/// Mapping of plan levels to their default warranty items (benefits)
+model WarrantyPlanLevelBenefit {
+  id           String           @id @default(cuid())
+  planLevelId  String
+  planLevel    WarrantyPlanLevel @relation(fields: [planLevelId], references: [id], onDelete: Cascade)
+  warrantyItemId String
+  warrantyItem WarrantyItem     @relation(fields: [warrantyItemId], references: [id], onDelete: Cascade)
+
+  @@unique([planLevelId, warrantyItemId])
+  @@index([planLevelId])
+  @@index([warrantyItemId])
 }
 
 model WarrantyPackageItem {
@@ -216,12 +245,26 @@ model WarrantySale {
   updatedAt               DateTime      @updatedAt
 
   invoices                Invoice[]
+  benefits                WarrantySaleBenefit[]
 
   @@index([customerId])
   @@index([vehicleId])
   @@index([dealerId])
   @@index([policyNumber])
   @@index([saleDate])
+}
+
+/// Per‑sale snapshot of selected warranty benefits
+model WarrantySaleBenefit {
+  id             String       @id @default(cuid())
+  warrantySaleId String
+  warrantySale   WarrantySale @relation(fields: [warrantySaleId], references: [id], onDelete: Cascade)
+  warrantyItemId String
+  warrantyItem   WarrantyItem @relation(fields: [warrantyItemId], references: [id])
+  type           String       @default("benefit") // future‑proofing if we ever store features
+
+  @@index([warrantySaleId])
+  @@index([warrantyItemId])
 }
 
 model Invoice {
@@ -275,10 +318,14 @@ model CustomerVehicle {
 model WarrantyItem {
   id        String   @id @default(cuid())
   label     String
+  description String?
   type      String   @default("benefit")
   status    String   @default("active")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  planLevelBenefits   WarrantyPlanLevelBenefit[]
+  saleBenefits        WarrantySaleBenefit[]
+  
   
   packageItems WarrantyPackageItem[]
 

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CreateWarrantyItemDto } from '../dto/create-warranty-item.dto';
 
 @Injectable()
 export class WarrantyItemService {
@@ -55,5 +56,24 @@ export class WarrantyItemService {
       this.logger.error(`Failed to fetch warranty items: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * Create a new warranty item (benefit/feature)
+   */
+  async create(dto: CreateWarrantyItemDto): Promise<any> {
+    const { label, type = 'benefit', description } = dto;
+
+    const item = await this.prisma.warrantyItem.create({
+      data: {
+        label: label.trim(),
+        type,
+        description: description?.trim() || null,
+        status: 'active',
+      },
+    });
+
+    this.logger.log(`Created warranty item ${item.id} (${item.label})`);
+    return item;
   }
 }
