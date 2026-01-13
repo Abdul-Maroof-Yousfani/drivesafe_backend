@@ -635,11 +635,25 @@ model WarrantySale {
 
   invoices                Invoice[]
 
+  benefits                WarrantySaleBenefit[]
+
   @@index([customerId])
   @@index([vehicleId])
   @@index([dealerId])
   @@index([policyNumber])
   @@index([saleDate])
+}
+
+model WarrantySaleBenefit {
+  id             String       @id @default(cuid())
+  warrantySaleId String
+  warrantySale   WarrantySale @relation(fields: [warrantySaleId], references: [id], onDelete: Cascade)
+  warrantyItemId String
+  warrantyItem   WarrantyItem @relation(fields: [warrantyItemId], references: [id])
+  type           String       @default("benefit")
+
+  @@index([warrantySaleId])
+  @@index([warrantyItemId])
 }
 
 model Invoice {
@@ -691,12 +705,13 @@ model CustomerVehicle {
 model WarrantyItem {
   id        String   @id @default(cuid())
   label     String
+  description String?
   type      String   @default("benefit")
   status    String   @default("active")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
   packageItems WarrantyPackageItem[]
-
+saleBenefits WarrantySaleBenefit[]
   @@index([type])
 }

@@ -47,6 +47,7 @@ export class WarrantySaleService {
       customerConsent,
       customerSignature,
       mileageAtSale,
+      includedBenefits,
     } = dto;
 
     // Update vehicle mileage if applicable
@@ -118,6 +119,11 @@ export class WarrantySaleService {
       },
     });
 
+    // Snapshot selected benefits for this sale (if provided)
+    if (Array.isArray(includedBenefits) && includedBenefits.length > 0) {
+      await this.syncSaleBenefits(this.prisma, sale.id, includedBenefits);
+    }
+
     this.logger.log(`Created master warranty sale: ${sale.id}`);
     return sale;
   }
@@ -143,6 +149,7 @@ export class WarrantySaleService {
       customerConsent,
       customerSignature,
       mileageAtSale,
+      includedBenefits,
     } = dto;
 
     // Validate customer in tenant DB
@@ -238,6 +245,11 @@ export class WarrantySaleService {
       },
     });
 
+    // Snapshot selected benefits for this dealer sale (if provided)
+    if (Array.isArray(includedBenefits) && includedBenefits.length > 0) {
+      await this.syncSaleBenefits(client, tenantSale.id, includedBenefits);
+    }
+
     // Create invoice in tenant DB
     const dealerCost =
       durationMonths === 12
@@ -331,6 +343,11 @@ export class WarrantySaleService {
             fixedClaimLimit: true,
           },
         },
+        benefits: {
+          include: {
+            warrantyItem: true,
+          },
+        },
         createdBy: {
           select: {
             id: true,
@@ -395,6 +412,9 @@ export class WarrantySaleService {
               },
             },
           },
+          benefits: {
+            include: { warrantyItem: true },
+          },
           // Note: Tenant schema doesn't have createdBy relation, only createdById field
         },
       });
@@ -449,6 +469,11 @@ export class WarrantySaleService {
                 warrantyItem: true,
               },
             },
+          },
+        },
+        benefits: {
+          include: {
+            warrantyItem: true,
           },
         },
         createdBy: {
@@ -751,31 +776,34 @@ export class WarrantySaleService {
     });
 
     if (masterCustomers.length > 0) {
-      const sale = await this.prisma.warrantySale.findFirst({
+        const sale = await this.prisma.warrantySale.findFirst({
         where: {
           id,
           customerId: { in: masterCustomers.map((c) => c.id) },
         },
-        include: {
-          customer: true,
-          vehicle: true,
-          warrantyPackage: {
-            include: {
-              items: {
-                include: { warrantyItem: true },
+          include: {
+            customer: true,
+            vehicle: true,
+            warrantyPackage: {
+              include: {
+                items: {
+                  include: { warrantyItem: true },
+                },
+              },
+            },
+            dealer: true,
+            benefits: {
+              include: { warrantyItem: true },
+            },
+            createdBy: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
               },
             },
           },
-          dealer: true,
-          createdBy: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
-        },
       });
 
       if (sale) return sale;
@@ -822,6 +850,9 @@ export class WarrantySaleService {
                 },
               },
             },
+            benefits: {
+              include: { warrantyItem: true },
+            },
           },
         });
 
@@ -845,5 +876,41 @@ export class WarrantySaleService {
     }
 
     throw new NotFoundException('Warranty sale not found');
+  }
+
+  /**
+   * Helper: snapshot selected benefits for a sale into WarrantySaleBenefit
+   */
+  private async syncSaleBenefits(
+    client: any,
+    saleId: string,
+    benefitIds: string[],
+  ): Promise<void> {
+    if (!benefitIds.length) return;
+
+    // Clear existing mappings
+    await client.warrantySaleBenefit.deleteMany({
+      where: { warrantySaleId: saleId },
+    });
+
+    const items = await client.warrantyItem.findMany({
+      where: {
+        id: { in: benefitIds },
+        type: 'benefit',
+        status: 'active',
+      },
+      select: { id: true },
+    });
+
+    if (!items.length) return;
+
+    await client.warrantySaleBenefit.createMany({
+      data: items.map((item) => ({
+        warrantySaleId: saleId,
+        warrantyItemId: item.id,
+        type: 'benefit',
+      })),
+      skipDuplicates: true,
+    });
   }
 }

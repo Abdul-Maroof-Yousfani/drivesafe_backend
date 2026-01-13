@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsNumber,
   IsNotEmpty,
+  IsArray,
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -73,4 +74,14 @@ export class AssignPackageToDealerDto {
   @IsNumber()
   @Min(0)
   dealerPrice36Months?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Benefit IDs to include for this dealer assignment. If omitted, all package benefits are used.',
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  includedBenefits?: string[];
 }

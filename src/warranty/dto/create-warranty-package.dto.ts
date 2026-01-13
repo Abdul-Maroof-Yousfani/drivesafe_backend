@@ -160,7 +160,6 @@ export class CreateWarrantyPackageDto {
     default: false,
   })
   @IsOptional()
-  isPreset?: boolean;
 
   @ApiPropertyOptional({
     description: 'Preset type (silver, gold, platinum, etc.)',

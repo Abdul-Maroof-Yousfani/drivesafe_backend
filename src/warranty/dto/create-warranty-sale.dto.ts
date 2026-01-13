@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsBoolean,
   IsDateString,
+  IsArray,
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -122,4 +123,13 @@ export class CreateWarrantySaleDto {
   @IsNumber()
   @Min(0)
   mileageAtSale?: number;
+
+  @ApiPropertyOptional({
+    description: 'Selected benefit IDs for this sale (snapshot)',
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  includedBenefits?: string[];
 }

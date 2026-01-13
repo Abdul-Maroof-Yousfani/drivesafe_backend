@@ -63,7 +63,6 @@ export class UploadService {
         const imageBuffer = file.buffer || fs.readFileSync(file.path);
         const optimized = await sharp(imageBuffer)
           .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
-          .jpeg({ quality: 85 })
           .toBuffer();
 
         fs.writeFileSync(filePath, optimized);
@@ -307,10 +306,8 @@ export class UploadService {
     if (file.mimetype.startsWith('image/') && fileCategory === 'logos') {
       try {
         const imageBuffer = file.buffer || fs.readFileSync(file.path);
-        // For logos, resize but maintain quality
         const optimized = await sharp(imageBuffer)
           .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
-          .png({ quality: 90 })
           .toBuffer();
 
         fs.writeFileSync(filePath, optimized);

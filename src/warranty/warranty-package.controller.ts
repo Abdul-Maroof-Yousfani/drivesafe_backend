@@ -93,43 +93,6 @@ export class WarrantyPackageController {
     };
   }
 
-  @Get('presets')
-  @Roles('super_admin', 'admin')
-  @ApiOperation({ summary: 'Get all warranty plan presets' })
-  async getPresets() {
-    const presets = await this.warrantyPackageService.findPresets();
-    return {
-      status: true,
-      data: presets,
-    };
-  }
-
-  @Post('from-preset/:presetId')
-  @Roles('super_admin', 'admin')
-  @ApiOperation({ summary: 'Create warranty package from preset with customizable benefits' })
-  async createFromPreset(
-    @Param('presetId') presetId: string,
-    @Body() dto: {
-      name: string;
-      keyBenefits?: string[];
-      includedFeatures?: string[];
-      dealerId?: string;
-      [key: string]: any;
-    },
-    @Req() req: RequestWithUser,
-  ) {
-    const pkg = await this.warrantyPackageService.createFromPreset(
-      presetId,
-      dto,
-      req.user.userId,
-    );
-    return {
-      status: true,
-      message: 'Warranty package created from preset successfully',
-      data: pkg,
-    };
-  }
-
   @Get(':id')
   @Roles('super_admin', 'admin', 'dealer')
   @ApiOperation({ summary: 'Get warranty package by ID' })

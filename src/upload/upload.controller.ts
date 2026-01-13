@@ -108,12 +108,13 @@ export class UploadController {
       throw new BadRequestException('No file provided');
     }
 
-    // For super_admin, allow uploads without dealer info (e.g., for logos)
+    // For super_admin/admin, allow uploads without dealer info (e.g., for logos)
     // For dealers, require dealer info
-    const isSuperAdmin = req.user.role === 'super_admin';
+    const isBackofficeUser =
+      req.user.role === 'super_admin' || req.user.role === 'admin';
     let dealerInfo: { id: string; name: string } | null = null;
     
-    if (!isSuperAdmin) {
+    if (!isBackofficeUser) {
       dealerInfo = await this.getDealerInfo(req);
       if (!dealerInfo) {
         throw new BadRequestException(
@@ -137,8 +138,8 @@ export class UploadController {
       }
     }
 
-    // For super_admin, use a master storage path
-    const result = isSuperAdmin
+    // For super_admin/admin, use a master storage path
+    const result = isBackofficeUser
       ? await this.uploadService.processUploadForSuperAdmin(
           file,
           req.user.sub,
@@ -198,27 +199,38 @@ export class UploadController {
       throw new BadRequestException('No files provided');
     }
 
-    const dealerInfo = await this.getDealerInfo(req);
-    if (!dealerInfo) {
-      throw new BadRequestException(
-        'Dealer information not found. Only dealers can upload files.',
-      );
-    }
+    // For super_admin/admin, allow uploads without dealer info (e.g., for logos)
+    // For dealers, require dealer info
+    const isBackofficeUser =
+      req.user.role === 'super_admin' || req.user.role === 'admin';
+    let dealerInfo: { id: string; name: string } | null = null;
+    
+    if (!isBackofficeUser) {
+      dealerInfo = await this.getDealerInfo(req);
+      if (!dealerInfo) {
+        throw new BadRequestException(
+          'Dealer information not found. Only dealers can upload files.',
+        );
+      }
 
-    // Check total size
-    const totalSize = files.reduce((sum, file) => sum + file.size, 0);
-    const storageCheck = await this.checkStorageLimit(dealerInfo.id, totalSize);
-    if (!storageCheck.hasSpace) {
-      throw new PayloadTooLargeException({
-        status: false,
-        message: `Storage limit exceeded. Required: ${(totalSize / (1024 * 1024)).toFixed(2)} MB, Available: ${(Number(storageCheck.availableBytes) / (1024 * 1024)).toFixed(2)} MB`,
-        storageInfo: {
-          used: Number(storageCheck.usedBytes) / (1024 * 1024 * 1024),
-          limit: Number(storageCheck.limitBytes) / (1024 * 1024 * 1024),
-          percentageUsed: storageCheck.percentageUsed,
-          available: Number(storageCheck.availableBytes) / (1024 * 1024 * 1024),
-        },
-      });
+      // Check total size
+      const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+      const storageCheck = await this.checkStorageLimit(dealerInfo.id, totalSize);
+      if (!storageCheck.hasSpace) {
+        throw new PayloadTooLargeException({
+          status: false,
+          message: `Storage limit exceeded. Required: ${(totalSize / (1024 * 1024)).toFixed(2)} MB, Available: ${(Number(storageCheck.availableBytes) / (1024 * 1024)).toFixed(2)} MB`,
+          storageInfo: {
+            used: Number(storageCheck.usedBytes) / (1024 * 1024 * 1024),
+            limit: Number(storageCheck.limitBytes) / (1024 * 1024 * 1024),
+            percentageUsed: storageCheck.percentageUsed,
+            available: Number(storageCheck.availableBytes) / (1024 * 1024 * 1024),
+          },
+        });
+      }
+    } else {
+      // For super_admin, try to get dealer info if provided, but don't require it
+      dealerInfo = await this.getDealerInfo(req);
     }
 
     const results: Array<{
@@ -228,14 +240,22 @@ export class UploadController {
       size: number;
       mimetype: string;
     }> = [];
+    
     for (const file of files) {
-      const result = await this.uploadService.processUpload(
-        file,
-        dealerInfo.id,
-        dealerInfo.name,
-        req.user.sub,
-        category,
-      );
+      const result =
+        isBackofficeUser && !dealerInfo
+          ? await this.uploadService.processUploadForSuperAdmin(
+              file,
+              req.user.sub,
+              category,
+            )
+          : await this.uploadService.processUpload(
+              file,
+              dealerInfo!.id,
+              dealerInfo!.name,
+              req.user.sub,
+              category,
+            );
       results.push(result);
     }
 
