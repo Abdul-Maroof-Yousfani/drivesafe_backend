@@ -14,6 +14,9 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Generate Prisma Client
+        run: npx prisma generate # Ye TypeScript ko models ki pehchan karwayega
+
       - name: Install & Build
         run: |
           npm install
