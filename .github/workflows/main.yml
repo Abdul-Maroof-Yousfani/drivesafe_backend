@@ -1,7 +1,7 @@
 name: Deploy NestJS
 on:
   push:
-    branches: [ main ] # Jab main branch par push ho
+    branches: [ main ]
 
 jobs:
   deploy:
@@ -14,30 +14,34 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install Dependencies
+        run: npm install
+
       - name: Generate Prisma Client
         run: |
-          npm install prisma --save-dev
-          npx prisma generate --schema=./prisma/schema.prisma
+          # File dhoondne ka pakka tareeqa
+          SCHEMA_FILE=$(find . -name "schema.prisma" -not -path "*/node_modules/*" | head -n 1)
+          echo "Schema found at: $SCHEMA_FILE"
+          
+          # Prisma generate command
+          npx prisma generate --schema=$SCHEMA_FILE
         env:
           DATABASE_URL: "postgresql://drivesafewarranty:lkajd65736%5Ejdb000%2D0JJh@127.0.0.1:5432/drivesafewarranty_db"
-          
 
-      - name: Install & Build
-        run: |
-          npm install
-          npm run build # Yahan build ban rahi hai
+      - name: Build Project
+        run: npm run build
 
-      - name: SFTP Deploy
+      - name: SFTP Deploy (Dist and Package)
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
           server: ${{ secrets.SFTP_SERVER }}
           username: ${{ secrets.SFTP_USERNAME }}
           password: ${{ secrets.SFTP_PASSWORD }}
-          local_path: './dist' # Sirf build folder bhej rahe hain
-          remote_path: '/var/www/drivesafe-backend-updated'
+          local_path: './dist' 
+          remote_path: '/var/www/drivesafe-backend-updated/dist'
           delete_remote_files: true
 
-      - name: Copy Package Files
+      - name: SFTP Deploy (Root Files)
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
           server: ${{ secrets.SFTP_SERVER }}
