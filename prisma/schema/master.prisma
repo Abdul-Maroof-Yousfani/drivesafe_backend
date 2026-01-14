@@ -361,6 +361,7 @@ model FileUpload {
   createdBy        User?    @relation("FileUploadCreatedBy", fields: [createdById], references: [id])
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+  customerDocuments CustomerDocument[]
 
   @@index([dealerId])
   @@index([category])

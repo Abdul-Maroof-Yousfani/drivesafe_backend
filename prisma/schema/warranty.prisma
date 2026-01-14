@@ -24,6 +24,7 @@ model Customer {
   
   vehicles          CustomerVehicle[]
   warrantySales     WarrantySale[]
+  documents         CustomerDocument[]
   
   @@index([email])
   @@index([phone])
@@ -71,6 +72,7 @@ model Dealer {
   @@index([email])
   @@index([phone])
   @@index([databaseName])
+  documents               CustomerDocument[]
 }
 
 model InvoiceTemplate {
@@ -330,6 +332,26 @@ model WarrantyItem {
   packageItems WarrantyPackageItem[]
 
   @@index([type])
+}
+
+model CustomerDocument {
+  id               String   @id @default(cuid())
+  name             String
+  description      String?
+  fileId           String
+  file             FileUpload @relation(fields: [fileId], references: [id])
+  customerId       String
+  customer         Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  dealerId         String?
+  dealer           Dealer?  @relation(fields: [dealerId], references: [id], onDelete: SetNull)
+  createdById      String?
+  createdBy        User?    @relation("DocumentUploadedBy", fields: [createdById], references: [id])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([dealerId])
+  @@index([createdById])
 }
 
 model DealerStorage {

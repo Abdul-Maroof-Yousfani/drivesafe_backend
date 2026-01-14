@@ -15,6 +15,7 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaClient as TenantClient } from '@prisma/tenant-client';
 import * as bcrypt from 'bcrypt';
 import { TenantDatabaseService } from '../common/services/tenant-database.service';
+import { ActivityLogService } from '../common/services/activity-log.service';
 
 @Injectable()
 export class CustomerService {
@@ -24,6 +25,7 @@ export class CustomerService {
     private prisma: PrismaService,
     private configService: ConfigService,
     private tenantDb: TenantDatabaseService,
+    private activityLog: ActivityLogService,
   ) {}
 
   async create(createCustomerDto: CreateCustomerDto, user: any) {
@@ -96,6 +98,16 @@ export class CustomerService {
           },
         },
         include: { vehicles: true },
+      });
+
+      await this.activityLog.log({
+        userId: user.userId,
+        action: 'create',
+        module: 'customers',
+        entity: 'Customer',
+        entityId: customer.id,
+        description: `Created customer ${customer.firstName} ${customer.lastName}`,
+        newValues: customer,
       });
 
       return customer;
@@ -300,11 +312,24 @@ export class CustomerService {
         }
       }
 
-      return prisma.customer.update({
+      const updated = await prisma.customer.update({
         where: { id },
         data: updateData,
         include: { vehicles: true },
       });
+
+      await this.activityLog.log({
+        userId: user.userId,
+        action: 'update',
+        module: 'customers',
+        entity: 'Customer',
+        entityId: id,
+        description: `Updated customer ${exists.firstName} ${exists.lastName}`,
+        oldValues: exists,
+        newValues: updated,
+      });
+
+      return updated;
     });
   }
 
@@ -325,6 +350,17 @@ export class CustomerService {
       }
 
       await prisma.customer.delete({ where: { id } });
+
+      await this.activityLog.log({
+        userId: user.userId,
+        action: 'delete',
+        module: 'customers',
+        entity: 'Customer',
+        entityId: id,
+        description: `Deleted customer ${exists.firstName} ${exists.lastName}`,
+        oldValues: exists,
+      });
+
       return { message: 'Customer deleted successfully' };
     });
   }
@@ -361,13 +397,25 @@ export class CustomerService {
         );
       }
 
-      return prisma.customerVehicle.create({
+      const vehicle = await prisma.customerVehicle.create({
         data: {
           ...createVehicleDto,
           customerId,
           year: Number(createVehicleDto.year),
         },
       });
+
+      await this.activityLog.log({
+        userId: user.userId,
+        action: 'create',
+        module: 'vehicles',
+        entity: 'CustomerVehicle',
+        entityId: vehicle.id,
+        description: `Added vehicle ${vehicle.year} ${vehicle.make} ${vehicle.model} to customer ${customer.firstName} ${customer.lastName}`,
+        newValues: vehicle,
+      });
+
+      return vehicle;
     });
   }
 
@@ -430,10 +478,23 @@ export class CustomerService {
         throw new BadRequestException('No fields to update');
       }
 
-      return prisma.customerVehicle.update({
+      const updated = await prisma.customerVehicle.update({
         where: { id: vehicleId },
         data: updateData,
       });
+
+      await this.activityLog.log({
+        userId: user.userId,
+        action: 'update',
+        module: 'vehicles',
+        entity: 'CustomerVehicle',
+        entityId: vehicleId,
+        description: `Updated vehicle ${existing.year} ${existing.make} ${existing.model}`,
+        oldValues: existing,
+        newValues: updated,
+      });
+
+      return updated;
     });
   }
 
@@ -469,6 +530,17 @@ export class CustomerService {
 
       try {
         await prisma.customerVehicle.delete({ where: { id: vehicleId } });
+
+        await this.activityLog.log({
+          userId: user.userId,
+          action: 'delete',
+          module: 'vehicles',
+          entity: 'CustomerVehicle',
+          entityId: vehicleId,
+          description: `Deleted vehicle ${existing.year} ${existing.make} ${existing.model}`,
+          oldValues: existing,
+        });
+
         return { message: 'Vehicle deleted successfully' };
       } catch (error: any) {
         if (error.code === 'P2003') {

@@ -5,9 +5,14 @@ import { GoogleSheetsService } from './services/google-sheets.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ConfigModule } from '@nestjs/config';
 
+import { ActivityLogController } from './activity-log.controller';
+import { forwardRef } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
+
 @Global()
 @Module({
-  imports: [PrismaModule, ConfigModule],
+  imports: [PrismaModule, ConfigModule, forwardRef(() => AuthModule)],
+  controllers: [ActivityLogController],
   providers: [ActivityLogService, TenantDatabaseService, GoogleSheetsService],
   exports: [ActivityLogService, TenantDatabaseService, GoogleSheetsService],
 })

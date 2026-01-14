@@ -49,4 +49,9 @@ export class GetInvoicesDto {
   @IsOptional()
   @IsDateString()
   endDate?: string;
+
+  @ApiPropertyOptional({ description: 'Exclude direct sales (dealerId: null)' })
+  @IsOptional()
+  @Type(() => Boolean)
+  excludeDirectSales?: boolean;
 }
