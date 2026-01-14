@@ -17,21 +17,19 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Generate Prisma Client
+      - name: Force Prisma Generate
+        # Yahan hum path khud dhoond kar generate kar rahe hain
         run: |
-          # File dhoondne ka pakka tareeqa
-          SCHEMA_FILE=$(find . -name "schema.prisma" -not -path "*/node_modules/*" | head -n 1)
-          echo "Schema found at: $SCHEMA_FILE"
-          
-          # Prisma generate command
-          npx prisma generate --schema=$SCHEMA_FILE
+          SCHEMA_PATH=$(find . -name "schema.prisma" -not -path "*/node_modules/*" | head -n 1)
+          echo "Found schema at: $SCHEMA_PATH"
+          npx prisma generate --schema=$SCHEMA_PATH
         env:
           DATABASE_URL: "postgresql://drivesafewarranty:lkajd65736%5Ejdb000%2D0JJh@127.0.0.1:5432/drivesafewarranty_db"
 
       - name: Build Project
         run: npm run build
 
-      - name: SFTP Deploy (Dist and Package)
+      - name: SFTP Deploy (Dist folder)
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
           server: ${{ secrets.SFTP_SERVER }}
@@ -41,11 +39,12 @@ jobs:
           remote_path: '/var/www/drivesafe-backend-updated/dist'
           delete_remote_files: true
 
-      - name: SFTP Deploy (Root Files)
+      - name: SFTP Deploy (Package & Prisma Files)
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
           server: ${{ secrets.SFTP_SERVER }}
           username: ${{ secrets.SFTP_USERNAME }}
           password: ${{ secrets.SFTP_PASSWORD }}
-          local_path: './package*.json'
+          # Hum prisma folder bhi bhej rahe hain taaki server par migration chal sake
+          local_path: './package*.json,./prisma'
           remote_path: '/var/www/drivesafe-backend-updated'
