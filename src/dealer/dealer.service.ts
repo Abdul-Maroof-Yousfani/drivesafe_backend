@@ -17,6 +17,7 @@ import * as path from 'path';
 import { Pool } from 'pg';
 import { TenantDatabaseService } from '../common/services/tenant-database.service';
 import { GoogleSheetsService } from '../common/services/google-sheets.service';
+import { ActivityLogService } from '../common/services/activity-log.service';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -30,6 +31,7 @@ export class DealerService {
     private configService: ConfigService,
     private tenantDb: TenantDatabaseService,
     private googleSheetsService: GoogleSheetsService,
+    private activityLog: ActivityLogService,
   ) {}
 
   async create(createDealerDto: CreateDealerDto, createdById: string) {
@@ -181,6 +183,17 @@ export class DealerService {
         password: dbPassword,
         createdDate: new Date(),
         status: 'active',
+      });
+
+      // 10. Activity Log
+      await this.activityLog.log({
+        userId: createdById,
+        action: 'create',
+        module: 'dealers',
+        entity: 'Dealer',
+        entityId: updatedDealer.id,
+        description: `Created dealer ${updatedDealer.businessNameLegal}`,
+        newValues: updatedDealer,
       });
 
       return {
@@ -411,7 +424,7 @@ export class DealerService {
   }
 
   async update(id: string, updateDealerDto: UpdateDealerDto, userId: string) {
-    await this.findOne(id); // check existence
+    const existing = await this.findOne(id); // check existence
 
     const { ...data } = updateDealerDto;
 
@@ -426,13 +439,36 @@ export class DealerService {
       where: { id },
       data: updateData,
     });
+
+    await this.activityLog.log({
+      userId,
+      action: 'update',
+      module: 'dealers',
+      entity: 'Dealer',
+      entityId: id,
+      description: `Updated dealer ${existing.businessNameLegal}`,
+      oldValues: existing,
+      newValues: updated,
+    });
+
     return updated;
   }
 
   async remove(id: string, userId: string) {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
     // Hard delete? Or Soft? Legacy was hard delete.
     await this.prisma.dealer.delete({ where: { id } });
+
+    await this.activityLog.log({
+      userId,
+      action: 'delete',
+      module: 'dealers',
+      entity: 'Dealer',
+      entityId: id,
+      description: `Deleted dealer ${existing.businessNameLegal}`,
+      oldValues: existing,
+    });
+
     return { message: 'Dealer deleted successfully' };
   }
 

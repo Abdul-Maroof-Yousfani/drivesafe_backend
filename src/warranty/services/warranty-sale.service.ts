@@ -124,6 +124,37 @@ export class WarrantySaleService {
       await this.syncSaleBenefits(this.prisma, sale.id, includedBenefits);
     }
 
+    // [NEW] Create Invoice for master sale
+    const invoiceNumber = `INV-${sale.policyNumber}`;
+    const dueDate = new Date(now);
+    dueDate.setDate(dueDate.getDate() + 30); // Net 30 default
+
+    await this.prisma.invoice.create({
+      data: {
+        id: randomUUID(),
+        invoiceNumber,
+        warrantySaleId: sale.id,
+        dealerId: null, // Admin sales have no dealer
+        amount: safeNumber(price) || 0,
+        status: 'paid', // Admin sales are usually direct/pre-paid
+        invoiceDate: now,
+        dueDate,
+        paidDate: now,
+        paymentMethod: paymentMethod || 'admin_assignment',
+        createdById: userId,
+      },
+    });
+
+    await this.activityLog.log({
+      userId,
+      action: 'create',
+      module: 'warranty-sales',
+      entity: 'WarrantySale',
+      entityId: sale.id,
+      description: `Admin created master warranty sale for customer ${sale.customerId}`,
+      newValues: sale,
+    });
+
     this.logger.log(`Created master warranty sale: ${sale.id}`);
     return sale;
   }
@@ -317,7 +348,10 @@ export class WarrantySaleService {
       if (endDate) where.saleDate.lte = new Date(endDate);
     }
     if (role === 'admin' && userId) {
-      where.createdById = userId;
+      where.OR = [
+        { createdById: userId },
+        { dealerId: null },
+      ];
     }
 
     return this.prisma.warrantySale.findMany({
@@ -326,6 +360,9 @@ export class WarrantySaleService {
         customer: true,
         dealer: true,
         vehicle: true,
+        invoices: {
+          select: { id: true, invoiceNumber: true, status: true }
+        },
         warrantyPackage: {
           select: {
             id: true,
@@ -453,7 +490,10 @@ export class WarrantySaleService {
     // For other roles
     const where: any = { id };
     if (role === 'admin' && userId) {
-      where.createdById = userId;
+      where.OR = [
+        { createdById: userId },
+        { dealerId: null },
+      ];
     }
 
     const sale = await this.prisma.warrantySale.findFirst({
@@ -462,6 +502,9 @@ export class WarrantySaleService {
         customer: true,
         vehicle: true,
         dealer: true,
+        invoices: {
+          select: { id: true, invoiceNumber: true, status: true }
+        },
         warrantyPackage: {
           include: {
             items: {

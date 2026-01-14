@@ -6,7 +6,6 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ActivityLogService } from '../common/services/activity-log.service'; // Assuming this path
 
 @Module({
   imports: [
@@ -15,18 +14,16 @@ import { ActivityLogService } from '../common/services/activity-log.service'; //
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
         secret:
-          configService.get<string>('JWT_ACCESS_SECRET') ||
-          'your-access-secret',
+          configService.get<string>('JWT_ACCESS_SECRET') ,
         signOptions: {
-          expiresIn: (configService.get<string>('JWT_ACCESS_EXPIRES_IN') ||
-            '15m') as any,
+          expiresIn: (configService.get<string>('JWT_ACCESS_EXPIRES_IN') ) as any,
         },
       }),
       inject: [ConfigService],
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, ActivityLogService, JwtAuthGuard],
+  providers: [AuthService, JwtStrategy, JwtAuthGuard],
   exports: [AuthService, JwtAuthGuard],
 })
 export class AuthModule {}

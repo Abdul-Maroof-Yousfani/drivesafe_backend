@@ -32,6 +32,7 @@ export class InvoiceService {
       status,
       startDate,
       endDate,
+      excludeDirectSales,
     } = dto;
 
     let allInvoices: any[] = [];
@@ -46,7 +47,13 @@ export class InvoiceService {
         where.invoiceDate = {};
         if (startDate) where.invoiceDate.gte = new Date(startDate);
         if (endDate) where.invoiceDate.lte = new Date(endDate);
+        if (endDate) where.invoiceDate.lte = new Date(endDate);
       }
+      
+      if (excludeDirectSales) {
+        where.dealerId = { not: null };
+      }
+      
       return where;
     };
 

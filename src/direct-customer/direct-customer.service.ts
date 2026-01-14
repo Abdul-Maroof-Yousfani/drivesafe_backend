@@ -10,6 +10,7 @@ import { MailService } from '../mail/mail.service';
 import { DirectPurchaseDto, EligiblePackagesDto } from './dto';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
+import { ActivityLogService } from '../common/services/activity-log.service';
 
 @Injectable()
 export class DirectCustomerService {
@@ -18,6 +19,7 @@ export class DirectCustomerService {
   constructor(
     private prisma: PrismaService,
     private mailService: MailService,
+    private activityLog: ActivityLogService,
   ) {}
 
   /**
@@ -316,6 +318,16 @@ export class DirectCustomerService {
       this.logger.warn(`Failed to send emails: ${emailError.message}`);
       // Continue despite email failure - the purchase was successful
     }
+
+    await this.activityLog.log({
+      userId: result.user.id,
+      action: 'create',
+      module: 'direct-purchases',
+      entity: 'WarrantySale',
+      entityId: result.warrantySale.id,
+      description: `Direct purchase completed for ${customer.email}, policy: ${result.warrantySale.policyNumber}`,
+      newValues: result,
+    });
 
     this.logger.log(
       `Direct purchase completed for ${customer.email}, policy: ${result.warrantySale.policyNumber}`,
