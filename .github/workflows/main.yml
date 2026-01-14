@@ -1,0 +1,39 @@
+name: Deploy NestJS
+on:
+  push:
+    branches: [ main ] # Jab main branch par push ho
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install & Build
+        run: |
+          npm install
+          npm run build # Yahan build ban rahi hai
+
+      - name: SFTP Deploy
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+        with:
+          server: ${{ secrets.SFTP_SERVER }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          local_path: './dist' # Sirf build folder bhej rahe hain
+          remote_path: '/var/www/drivesafe-backend-updated'
+          delete_remote_files: true
+
+      - name: Copy Package Files
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+        with:
+          server: ${{ secrets.SFTP_SERVER }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          local_path: './package*.json'
+          remote_path: '/var/www/drivesafe-backend-updated'
