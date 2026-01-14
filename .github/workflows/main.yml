@@ -1,0 +1,50 @@
+name: Deploy NestJS
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Force Prisma Generate
+        # Yahan hum path khud dhoond kar generate kar rahe hain
+        run: |
+          SCHEMA_PATH=$(find . -name "schema.prisma" -not -path "*/node_modules/*" | head -n 1)
+          echo "Found schema at: $SCHEMA_PATH"
+          npx prisma generate --schema=$SCHEMA_PATH
+        env:
+          DATABASE_URL: "postgresql://drivesafewarranty:lkajd65736%5Ejdb000%2D0JJh@127.0.0.1:5432/drivesafewarranty_db"
+
+      - name: Build Project
+        run: npm run build
+
+      - name: SFTP Deploy (Dist folder)
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+        with:
+          server: ${{ secrets.SFTP_SERVER }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          local_path: './dist' 
+          remote_path: '/var/www/drivesafe-backend-updated/dist'
+          delete_remote_files: true
+
+      - name: SFTP Deploy (Package & Prisma Files)
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+        with:
+          server: ${{ secrets.SFTP_SERVER }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          # Hum prisma folder bhi bhej rahe hain taaki server par migration chal sake
+          local_path: './package*.json,./prisma'
+          remote_path: '/var/www/drivesafe-backend-updated'
