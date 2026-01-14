@@ -19,7 +19,7 @@ jobs:
           npm install prisma --save-dev
           npx prisma generate --schema=./prisma/schema.prisma
         env:
-          DATABASE_URL="postgresql://drivesafewarranty:lkajd65736%5Ejdb000%2D0JJh@127.0.0.1:5432/drivesafewarranty_db"
+          DATABASE_URL: "postgresql://drivesafewarranty:lkajd65736%5Ejdb000%2D0JJh@127.0.0.1:5432/drivesafewarranty_db"
           
 
       - name: Install & Build
