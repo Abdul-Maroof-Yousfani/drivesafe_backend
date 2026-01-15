@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantDatabaseService } from '../common/services/tenant-database.service';
 import { StorageService } from './storage.service';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -14,7 +15,30 @@ export class UploadService {
   constructor(
     private prisma: PrismaService,
     private storageService: StorageService,
+    private tenantDb: TenantDatabaseService,
   ) {}
+
+  private async getPrismaClient(dealerId: string) {
+    if (dealerId === 'super_admin' || dealerId === 'system') {
+      return this.prisma;
+    }
+
+    try {
+      // Check if dealer exists and has database configured
+      const dealer = await this.prisma.dealer.findUnique({
+        where: { id: dealerId },
+        select: { databaseName: true }
+      });
+
+      if (dealer && dealer.databaseName) {
+        return this.tenantDb.getTenantPrismaByDealerId(dealerId);
+      }
+    } catch (e) {
+      this.logger.warn(`Failed to get tenant client for dealer ${dealerId}, falling back to master: ${e.message}`);
+    }
+    
+    return this.prisma;
+  }
 
   /**
    * Process and save an uploaded file
@@ -100,8 +124,10 @@ export class UploadService {
     const url = `/dealers/${sanitizedName}/${fileCategory}/${newFilename}`;
 
     // Save to database
-    const fileUpload = await this.prisma.fileUpload.create({
-      data: {
+    const prisma = await this.getPrismaClient(dealerId);
+    
+    // Create DTO compatible with both clients
+    const fileData: any = {
         filename: newFilename,
         originalFilename: file.originalname,
         mimetype: file.mimetype,
@@ -111,7 +137,10 @@ export class UploadService {
         category: fileCategory,
         dealerId: dealerId,
         createdById: uploadedById,
-      },
+    };
+
+    const fileUpload = await prisma.fileUpload.create({
+      data: fileData,
     });
 
     // Update dealer storage usage only for real dealer uploads
@@ -141,6 +170,8 @@ export class UploadService {
       create: {
         dealerId,
         usedBytes: BigInt(additionalBytes),
+        // Limit is defaulted in schema, but we can set it explicitly if needed
+        limitBytes: BigInt(1073741824) // 1GB
       },
       update: {
         usedBytes: {
@@ -207,7 +238,9 @@ export class UploadService {
       where.category = category;
     }
 
-    const files = await this.prisma.fileUpload.findMany({
+    const prisma = dealerId ? await this.getPrismaClient(dealerId) : this.prisma;
+    
+    const files = await prisma.fileUpload.findMany({
       where,
       orderBy: { createdAt: 'desc' },
     });
@@ -245,7 +278,9 @@ export class UploadService {
       where.dealerId = dealerId;
     }
 
-    const file = await this.prisma.fileUpload.findFirst({
+    const prisma = dealerId ? await this.getPrismaClient(dealerId) : this.prisma;
+
+    const file = await prisma.fileUpload.findFirst({
       where,
     });
 
@@ -374,7 +409,9 @@ export class UploadService {
       where.dealerId = dealerId;
     }
 
-    const file = await this.prisma.fileUpload.findFirst({
+    const prisma = dealerId ? await this.getPrismaClient(dealerId) : this.prisma;
+
+    const file = await prisma.fileUpload.findFirst({
       where,
     });
 
@@ -388,7 +425,7 @@ export class UploadService {
       : 0;
 
     // Delete database record
-    await this.prisma.fileUpload.delete({
+    await prisma.fileUpload.delete({
       where: { id: fileId },
     });
 

@@ -427,14 +427,23 @@ model WorkingHoursPolicy {
 }
 
 model FileUpload {
-  id           String   @id @default(cuid())
-  filename     String
-  mimetype     String
-  size         Int
-  path         String?
-  createdById  String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String   @id @default(cuid())
+  filename         String
+  originalFilename String?
+  mimetype         String
+  size             Int
+  path             String?
+  url              String?
+  category         String   @default("other") // images, documents, invoices, logos, other
+  dealerId         String?
+  createdById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  customerDocuments CustomerDocument[]
+
+  @@index([dealerId])
+  @@index([category])
+  @@index([createdById])
 }
 
 model Customer {
@@ -460,6 +469,7 @@ model Customer {
   
   vehicles          CustomerVehicle[]
   warrantySales     WarrantySale[]
+  documents         CustomerDocument[]
   
   @@index([email])
   @@index([phone])
@@ -487,6 +497,8 @@ model Dealer {
   databaseName            String?   @unique  // Name of dealer's database (e.g., dealer_abc123)
   databaseUrl             String?            // Full connection string for dealer database
   username                String?            // Auto-generated username for dealer login
+  databaseUsername        String?            // Restricted DB user for dealer database
+  databasePassword        String?            // Restricted DB user password (encrypted at rest)
   credentialsGeneratedAt  DateTime?          // Timestamp when credentials were generated
   excelFilePath           String?            // Path to Excel file containing credentials
   
@@ -498,10 +510,12 @@ model Dealer {
   warrantySales           WarrantySale[]
   invoiceTemplate         InvoiceTemplate?
   invoices                Invoice[]                @relation("DealerInvoices")
+  dealerStorage           DealerStorage?
   
   @@index([email])
   @@index([phone])
   @@index([databaseName])
+  documents               CustomerDocument[]
 }
 
 model InvoiceTemplate {
@@ -554,7 +568,13 @@ model WarrantyPackage {
   name              String
   description       String?
   planLevel         String?
+  /// Optional reference key for dynamic plan levels (e.g. Silver, Gold)
+  // planLevel is kept as free text; dynamic plan levels are managed via WarrantyPlanLevel
   eligibility       String?
+  eligibilityMileageComparator String?
+  eligibilityMileageValue      Int?
+  eligibilityVehicleAgeYearsMax Int?
+  eligibilityTransmission      String?
   excess            Decimal?
   labourRatePerHour Decimal?
   fixedClaimLimit   Decimal?
@@ -575,6 +595,10 @@ model WarrantyPackage {
   context           String   @default("drive_safe")
   /// Base price (required for drive_safe context, optional otherwise)
   price             Decimal?
+  /// Whether this is a preset template (Silver, Gold, Platinum, etc.)
+  isPreset          Boolean  @default(false)
+  /// Preset type: "silver" | "gold" | "platinum" | null (for custom packages)
+  presetType        String?
   status            String    @default("active")
   createdById       String?
   createdAt         DateTime  @default(now())
@@ -582,6 +606,34 @@ model WarrantyPackage {
   
   warrantySales     WarrantySale[]
   items             WarrantyPackageItem[]
+  
+  @@index([isPreset])
+  @@index([presetType])
+}
+
+model WarrantyPlanLevel {
+  id          String                     @id @default(cuid())
+  name        String                     @unique
+  description String?
+  status      String                     @default("active")
+  createdAt   DateTime                   @default(now())
+  updatedAt   DateTime                   @updatedAt
+
+  benefits    WarrantyPlanLevelBenefit[]
+
+  @@index([status])
+}
+
+model WarrantyPlanLevelBenefit {
+  id           String           @id @default(cuid())
+  planLevelId  String
+  planLevel    WarrantyPlanLevel @relation(fields: [planLevelId], references: [id], onDelete: Cascade)
+  warrantyItemId String
+  warrantyItem WarrantyItem     @relation(fields: [warrantyItemId], references: [id], onDelete: Cascade)
+
+  @@unique([planLevelId, warrantyItemId])
+  @@index([planLevelId])
+  @@index([warrantyItemId])
 }
 
 model WarrantyPackageItem {
@@ -634,7 +686,6 @@ model WarrantySale {
   updatedAt               DateTime      @updatedAt
 
   invoices                Invoice[]
-
   benefits                WarrantySaleBenefit[]
 
   @@index([customerId])
@@ -650,7 +701,7 @@ model WarrantySaleBenefit {
   warrantySale   WarrantySale @relation(fields: [warrantySaleId], references: [id], onDelete: Cascade)
   warrantyItemId String
   warrantyItem   WarrantyItem @relation(fields: [warrantyItemId], references: [id])
-  type           String       @default("benefit")
+  type           String       @default("benefit") // future‑proofing if we ever store features
 
   @@index([warrantySaleId])
   @@index([warrantyItemId])
@@ -692,6 +743,7 @@ model CustomerVehicle {
   vin                String?
   registrationNumber String?
   mileage            Int      @default(0)
+  transmission       String?
   status             String   @default("active")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -710,8 +762,43 @@ model WarrantyItem {
   status    String   @default("active")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  planLevelBenefits   WarrantyPlanLevelBenefit[]
+  saleBenefits        WarrantySaleBenefit[]
+  
   
   packageItems WarrantyPackageItem[]
-saleBenefits WarrantySaleBenefit[]
+
   @@index([type])
+}
+
+model CustomerDocument {
+  id               String   @id @default(cuid())
+  name             String
+  description      String?
+  fileId           String
+  file             FileUpload @relation(fields: [fileId], references: [id])
+  customerId       String
+  customer         Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  dealerId         String?
+  dealer           Dealer?  @relation(fields: [dealerId], references: [id], onDelete: SetNull)
+  createdById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([dealerId])
+  @@index([createdById])
+}
+
+model DealerStorage {
+  id              String   @id @default(cuid())
+  dealerId        String   @unique
+  dealer          Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  usedBytes       BigInt   @default(0)
+  limitBytes      BigInt   @default(1073741824) // 1GB in bytes
+  lastCalculated  DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([dealerId])
 }

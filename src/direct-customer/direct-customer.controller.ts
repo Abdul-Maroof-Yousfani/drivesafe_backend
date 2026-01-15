@@ -6,11 +6,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { DirectCustomerService } from './direct-customer.service';
 import { DirectPurchaseDto, EligiblePackagesDto } from './dto';
 

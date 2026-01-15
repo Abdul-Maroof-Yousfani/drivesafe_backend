@@ -8,11 +8,7 @@ import {
   Param,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -25,9 +21,7 @@ import { UpdateWarrantyPlanLevelDto } from './dto/update-warranty-plan-level.dto
 @Controller('warranty-plan-levels')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class WarrantyPlanLevelController {
-  constructor(
-    private readonly planLevelService: WarrantyPlanLevelService,
-  ) {}
+  constructor(private readonly planLevelService: WarrantyPlanLevelService) {}
 
   @Get()
   @Roles('super_admin', 'admin')
@@ -93,5 +87,3 @@ export class WarrantyPlanLevelController {
     };
   }
 }
-
-

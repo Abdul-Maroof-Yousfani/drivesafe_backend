@@ -113,7 +113,7 @@ export class UploadController {
     const isBackofficeUser =
       req.user.role === 'super_admin' || req.user.role === 'admin';
     let dealerInfo: { id: string; name: string } | null = null;
-    
+
     if (!isBackofficeUser) {
       dealerInfo = await this.getDealerInfo(req);
       if (!dealerInfo) {
@@ -123,7 +123,10 @@ export class UploadController {
       }
 
       // Check storage limit for dealers
-      const storageCheck = await this.checkStorageLimit(dealerInfo.id, file.size);
+      const storageCheck = await this.checkStorageLimit(
+        dealerInfo.id,
+        file.size,
+      );
       if (!storageCheck.hasSpace) {
         throw new PayloadTooLargeException({
           status: false,
@@ -132,7 +135,8 @@ export class UploadController {
             used: Number(storageCheck.usedBytes) / (1024 * 1024 * 1024),
             limit: Number(storageCheck.limitBytes) / (1024 * 1024 * 1024),
             percentageUsed: storageCheck.percentageUsed,
-            available: Number(storageCheck.availableBytes) / (1024 * 1024 * 1024),
+            available:
+              Number(storageCheck.availableBytes) / (1024 * 1024 * 1024),
           },
         });
       }
@@ -204,7 +208,7 @@ export class UploadController {
     const isBackofficeUser =
       req.user.role === 'super_admin' || req.user.role === 'admin';
     let dealerInfo: { id: string; name: string } | null = null;
-    
+
     if (!isBackofficeUser) {
       dealerInfo = await this.getDealerInfo(req);
       if (!dealerInfo) {
@@ -215,7 +219,10 @@ export class UploadController {
 
       // Check total size
       const totalSize = files.reduce((sum, file) => sum + file.size, 0);
-      const storageCheck = await this.checkStorageLimit(dealerInfo.id, totalSize);
+      const storageCheck = await this.checkStorageLimit(
+        dealerInfo.id,
+        totalSize,
+      );
       if (!storageCheck.hasSpace) {
         throw new PayloadTooLargeException({
           status: false,
@@ -224,7 +231,8 @@ export class UploadController {
             used: Number(storageCheck.usedBytes) / (1024 * 1024 * 1024),
             limit: Number(storageCheck.limitBytes) / (1024 * 1024 * 1024),
             percentageUsed: storageCheck.percentageUsed,
-            available: Number(storageCheck.availableBytes) / (1024 * 1024 * 1024),
+            available:
+              Number(storageCheck.availableBytes) / (1024 * 1024 * 1024),
           },
         });
       }
@@ -240,7 +248,7 @@ export class UploadController {
       size: number;
       mimetype: string;
     }> = [];
-    
+
     for (const file of files) {
       const result =
         isBackofficeUser && !dealerInfo

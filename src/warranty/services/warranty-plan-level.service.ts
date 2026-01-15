@@ -73,8 +73,7 @@ export class WarrantyPlanLevelService {
     const updated = await this.prisma.warrantyPlanLevel.update({
       where: { id },
       data: {
-        name:
-          dto.name !== undefined ? dto.name.trim() : existing.name,
+        name: dto.name !== undefined ? dto.name.trim() : existing.name,
         description:
           dto.description !== undefined
             ? dto.description?.trim() || null
@@ -140,5 +139,3 @@ export class WarrantyPlanLevelService {
     });
   }
 }
-
-

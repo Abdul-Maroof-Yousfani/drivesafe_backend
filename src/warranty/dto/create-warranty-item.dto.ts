@@ -16,10 +16,10 @@ export class CreateWarrantyItemDto {
   @IsEnum(['benefit', 'feature'])
   type?: 'benefit' | 'feature';
 
-  @ApiPropertyOptional({ description: 'Detailed description of the benefit/feature' })
+  @ApiPropertyOptional({
+    description: 'Detailed description of the benefit/feature',
+  })
   @IsOptional()
   @IsString()
   description?: string;
 }
-
-

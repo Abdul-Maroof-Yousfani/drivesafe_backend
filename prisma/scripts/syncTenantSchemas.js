@@ -1,12 +1,20 @@
-require("dotenv").config();
-const { PrismaClient } = require("../../src/generated/prisma");
-const { Pool } = require("pg");
-const { execFile } = require("child_process");
-const { promisify } = require("util");
-const path = require("path");
-const { generateTenantSchema } = require("./tenantSchemaGenerator");
+require('dotenv').config();
+const { PrismaClient } = require('@prisma/client');
+const { Pool } = require('pg');
+const { PrismaPg } = require('@prisma/adapter-pg');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const path = require('path');
+const { generateTenantSchema } = require('./tenantSchemaGenerator');
 
-const prisma = new PrismaClient();
+const masterConnectionString = process.env.DATABASE_URL;
+if (!masterConnectionString) {
+  throw new Error('DATABASE_URL is required to sync tenant schemas');
+}
+
+const masterPool = new Pool({ connectionString: masterConnectionString });
+const masterAdapter = new PrismaPg(masterPool);
+const prisma = new PrismaClient({ adapter: masterAdapter });
 
 function parseArgs(argv) {
   const args = {
@@ -15,9 +23,9 @@ function parseArgs(argv) {
   };
 
   for (const a of argv.slice(2)) {
-    if (a === "--dry-run") args.dryRun = true;
-    else if (a.startsWith("--dealerId="))
-      args.dealerId = a.split("=")[1] || null;
+    if (a === '--dry-run') args.dryRun = true;
+    else if (a.startsWith('--dealerId='))
+      args.dealerId = a.split('=')[1] || null;
   }
 
   return args;
@@ -41,20 +49,20 @@ async function prismaDbPushTenantSchema({ connectionString }) {
   // Path to prisma/tenant-schema
   const tenantSchemaPath = path.resolve(
     process.cwd(),
-    "prisma",
-    "tenant-schema"
+    'prisma',
+    'tenant-schema',
   );
   const execFileAsync = promisify(execFile);
-  const npxCmd = process.platform === "win32" ? "npx.cmd" : "npx";
+  const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 
   // Prisma 7 no longer supports --skip-generate for db push
   const args = [
-    "prisma",
-    "db",
-    "push",
-    "--schema",
+    'prisma',
+    'db',
+    'push',
+    '--schema',
     tenantSchemaPath,
-    "--accept-data-loss",
+    '--accept-data-loss',
   ];
 
   await execFileAsync(npxCmd, args, {
@@ -84,29 +92,29 @@ async function main() {
       databaseUrl: true,
       status: true,
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: 'asc' },
   });
 
   if (mappings.length === 0) {
     console.log(
       dealerId
         ? `No tenant databases found for dealerId=${dealerId}`
-        : "No tenant databases found."
+        : 'No tenant databases found.',
     );
     return;
   }
 
   console.log(
     `Found ${mappings.length} tenant database(s)${
-      dealerId ? ` for dealerId=${dealerId}` : ""
-    }.`
+      dealerId ? ` for dealerId=${dealerId}` : ''
+    }.`,
   );
 
   if (dryRun) {
-    console.log("Dry run enabled. No changes will be applied.\n");
+    console.log('Dry run enabled. No changes will be applied.\n');
     for (const m of mappings) {
       console.log(
-        `- dealerId=${m.dealerId} db=${m.databaseName} status=${m.status}`
+        `- dealerId=${m.dealerId} db=${m.databaseName} status=${m.status}`,
       );
     }
     return;
@@ -120,7 +128,7 @@ async function main() {
     const label = `dealerId=${m.dealerId} db=${m.databaseName}`;
     try {
       if (!m.databaseUrl)
-        throw new Error("databaseUrl is missing in TenantDatabaseMapping");
+        throw new Error('databaseUrl is missing in TenantDatabaseMapping');
       console.log(`\nSyncing schema for ${label} ...`);
       await ensurePgCrypto(m.databaseUrl);
       await prismaDbPushTenantSchema({ connectionString: m.databaseUrl });
@@ -136,10 +144,10 @@ async function main() {
 
   console.log(`\nDone. Success=${ok} Failed=${failed}`);
   if (failures.length) {
-    console.log("\nFailures:");
+    console.log('\nFailures:');
     for (const f of failures) {
       console.log(
-        `- dealerId=${f.dealerId} db=${f.databaseName} status=${f.status} error=${f.error}`
+        `- dealerId=${f.dealerId} db=${f.databaseName} status=${f.status} error=${f.error}`,
       );
     }
     process.exitCode = 1;
@@ -148,9 +156,11 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error("Fatal error syncing tenant schemas:", e);
+    console.error('Fatal error syncing tenant schemas:');
+    console.dir(e, { depth: null });
     process.exitCode = 1;
   })
   .finally(async () => {
     await prisma.$disconnect().catch(() => {});
+    await masterPool.end().catch(() => {});
   });
