@@ -348,10 +348,7 @@ export class WarrantySaleService {
       if (endDate) where.saleDate.lte = new Date(endDate);
     }
     if (role === 'admin' && userId) {
-      where.OR = [
-        { createdById: userId },
-        { dealerId: null },
-      ];
+      where.OR = [{ createdById: userId }, { dealerId: null }];
     }
 
     return this.prisma.warrantySale.findMany({
@@ -361,7 +358,7 @@ export class WarrantySaleService {
         dealer: true,
         vehicle: true,
         invoices: {
-          select: { id: true, invoiceNumber: true, status: true }
+          select: { id: true, invoiceNumber: true, status: true },
         },
         warrantyPackage: {
           select: {
@@ -490,10 +487,7 @@ export class WarrantySaleService {
     // For other roles
     const where: any = { id };
     if (role === 'admin' && userId) {
-      where.OR = [
-        { createdById: userId },
-        { dealerId: null },
-      ];
+      where.OR = [{ createdById: userId }, { dealerId: null }];
     }
 
     const sale = await this.prisma.warrantySale.findFirst({
@@ -503,7 +497,7 @@ export class WarrantySaleService {
         vehicle: true,
         dealer: true,
         invoices: {
-          select: { id: true, invoiceNumber: true, status: true }
+          select: { id: true, invoiceNumber: true, status: true },
         },
         warrantyPackage: {
           include: {
@@ -819,34 +813,34 @@ export class WarrantySaleService {
     });
 
     if (masterCustomers.length > 0) {
-        const sale = await this.prisma.warrantySale.findFirst({
+      const sale = await this.prisma.warrantySale.findFirst({
         where: {
           id,
           customerId: { in: masterCustomers.map((c) => c.id) },
         },
-          include: {
-            customer: true,
-            vehicle: true,
-            warrantyPackage: {
-              include: {
-                items: {
-                  include: { warrantyItem: true },
-                },
-              },
-            },
-            dealer: true,
-            benefits: {
-              include: { warrantyItem: true },
-            },
-            createdBy: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
+        include: {
+          customer: true,
+          vehicle: true,
+          warrantyPackage: {
+            include: {
+              items: {
+                include: { warrantyItem: true },
               },
             },
           },
+          dealer: true,
+          benefits: {
+            include: { warrantyItem: true },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
       });
 
       if (sale) return sale;

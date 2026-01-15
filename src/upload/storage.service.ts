@@ -162,6 +162,8 @@ export class StorageService {
     limitBytes: bigint,
   ): {
     usedBytes: string;
+    limitBytes: string;
+    availableBytes: string;
     usedMB: number;
     usedGB: number;
     limitGB: number;
@@ -173,10 +175,13 @@ export class StorageService {
     const limitGB = Number(limitBytes) / (1024 * 1024 * 1024);
     const percentageUsed =
       Number((usedBytes * BigInt(10000)) / limitBytes) / 100;
+    const availableBytesBigInt = limitBytes - usedBytes;
     const availableGB = limitGB - usedGB;
 
     return {
       usedBytes: usedBytes.toString(),
+      limitBytes: limitBytes.toString(),
+      availableBytes: (availableBytesBigInt > BigInt(0) ? availableBytesBigInt : BigInt(0)).toString(),
       usedMB: Math.round(usedMB * 100) / 100,
       usedGB: Math.round(usedGB * 1000) / 1000,
       limitGB: Math.round(limitGB * 1000) / 1000,

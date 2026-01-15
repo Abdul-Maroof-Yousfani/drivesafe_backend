@@ -206,10 +206,6 @@ export class DealerService {
           databaseName,
           databaseUsername: dbUsername,
           databasePassword: dbPassword,
-          excelFile: {
-            path: '',
-            filename: 'credentials_not_generated.xlsx',
-          },
         },
       };
     } catch (error) {
@@ -343,6 +339,7 @@ export class DealerService {
             status: true,
           },
         },
+        dealerStorage: true,
       },
     });
     if (!dealer) throw new NotFoundException('Dealer not found');
@@ -420,6 +417,13 @@ export class DealerService {
         totalAmountPaid,
       },
       assignedPackages: warrantyPackages,
+      dealerStorage: dealer.dealerStorage
+        ? {
+            ...dealer.dealerStorage,
+            usedBytes: dealer.dealerStorage.usedBytes.toString(),
+            limitBytes: dealer.dealerStorage.limitBytes.toString(),
+          }
+        : null,
     };
   }
 
@@ -763,36 +767,31 @@ export class DealerService {
       process.cwd(),
       'prisma',
       'tenant-schema',
+      'base.prisma',
     );
     const isWindows = process.platform === 'win32';
 
-    const prismaArgs = [
-      'db',
-      'push',
-      '--schema',
-      tenantSchemaPath,
-      '--accept-data-loss',
-    ];
-
-    // Construct command
-    // In NestJS production build, we might be running from dist, so be careful about cwd.
-    // Assuming we run from project root always.
+    this.logger.log(`Pushing schema to tenant database: ${connectionString.split('@')[1] || connectionString}`);
 
     let command: string;
     // Quote the path to handle spaces
     if (isWindows) {
-      command = `npx prisma db push --schema "${tenantSchemaPath}" --accept-data-loss`;
+      command = `npx prisma db push --schema "${tenantSchemaPath}" --accept-data-loss --skip-generate`;
     } else {
-      command = `npx prisma db push --schema "${tenantSchemaPath}" --accept-data-loss`;
+      command = `npx prisma db push --schema "${tenantSchemaPath}" --accept-data-loss --skip-generate`;
     }
 
     try {
-      await execAsync(command, {
+      const { stdout, stderr } = await execAsync(command, {
         env: { ...process.env, DATABASE_URL: connectionString },
       });
+      if (stderr && !stderr.includes('reusing existing database')) {
+        this.logger.warn(`Prisma db push stderr: ${stderr}`);
+      }
+      this.logger.log(`Prisma db push stdout: ${stdout}`);
     } catch (error) {
-      this.logger.error('Error running prisma db push', error);
-      throw new Error('Failed to create tenant tables');
+      this.logger.error('Error running prisma db push', error.stack);
+      throw new Error(`Failed to create tenant tables: ${error.message}`);
     }
   }
 

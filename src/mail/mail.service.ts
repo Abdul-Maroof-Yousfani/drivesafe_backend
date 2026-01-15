@@ -19,7 +19,8 @@ export class MailService {
     firstName: string,
     password: string,
   ): Promise<boolean> {
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     // Extract first URL if comma-separated
     const portalUrl = frontendUrl.split(',')[0].trim();
 
@@ -41,7 +42,9 @@ export class MailService {
       this.logger.log(`Welcome email sent to ${email}`);
       return true;
     } catch (error) {
-      this.logger.error(`Failed to send welcome email to ${email}: ${error.message}`);
+      this.logger.error(
+        `Failed to send welcome email to ${email}: ${error.message}`,
+      );
       // Don't throw - email failure shouldn't break the registration flow
       return false;
     }
@@ -64,7 +67,8 @@ export class MailService {
       totalAmount: number;
     },
   ): Promise<boolean> {
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const portalUrl = frontendUrl.split(',')[0].trim();
 
     try {
@@ -84,7 +88,9 @@ export class MailService {
       this.logger.log(`Purchase confirmation email sent to ${email}`);
       return true;
     } catch (error) {
-      this.logger.error(`Failed to send purchase confirmation to ${email}: ${error.message}`);
+      this.logger.error(
+        `Failed to send purchase confirmation to ${email}: ${error.message}`,
+      );
       return false;
     }
   }

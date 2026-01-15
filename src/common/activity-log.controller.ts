@@ -11,7 +11,9 @@ export class ActivityLogController {
   constructor(private readonly activityLogService: ActivityLogService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get all activity logs with filtering and pagination' })
+  @ApiOperation({
+    summary: 'Get all activity logs with filtering and pagination',
+  })
   async findAll(
     @Query('page') page?: string,
     @Query('limit') limit?: string,

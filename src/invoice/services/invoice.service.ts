@@ -49,11 +49,11 @@ export class InvoiceService {
         if (endDate) where.invoiceDate.lte = new Date(endDate);
         if (endDate) where.invoiceDate.lte = new Date(endDate);
       }
-      
+
       if (excludeDirectSales) {
         where.dealerId = { not: null };
       }
-      
+
       return where;
     };
 

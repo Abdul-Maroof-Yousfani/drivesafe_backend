@@ -21,5 +21,3 @@ export class CreateWarrantyPlanLevelDto {
   @IsString({ each: true })
   benefitIds?: string[];
 }
-
-

@@ -36,7 +36,9 @@ export class CustomerDocumentController {
     // Basic check: only admin/super-admin should use this
     const allowedRoles = ['super-admin', 'super_admin', 'admin'];
     if (!allowedRoles.includes(req.user.role)) {
-      throw new UnauthorizedException('Insufficient permissions to view all documents');
+      throw new UnauthorizedException(
+        'Insufficient permissions to view all documents',
+      );
     }
     return this.documentService.getAllDocuments();
   }
@@ -68,6 +70,6 @@ export class CustomerDocumentController {
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a customer document' })
   async remove(@Param('id') id: string, @Request() req) {
-    return this.documentService.remove(id, req.user);
+    return this.documentService.delete(id, req.user);
   }
 }

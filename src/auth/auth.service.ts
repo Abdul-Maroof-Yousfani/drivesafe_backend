@@ -47,14 +47,16 @@ export class AuthService {
     // Only validate when the request is coming from a frontend portal
     // API requests will have localhost:PORT (backend) or api.domain.com as host
     // Frontend portals will have dealer.localhost:3003, customer.localhost:3003, etc.
-    
+
     // Check if this is a backend API request (not a frontend portal request)
     const backendPort = this.configService.get<string>('PORT') || '3004';
-    const backendHostPattern = new RegExp(`^(localhost|127\\.0\\.0\\.1):${backendPort}$`);
-    const isBackendApiRequest = 
+    const backendHostPattern = new RegExp(
+      `^(localhost|127\\.0\\.0\\.1):${backendPort}$`,
+    );
+    const isBackendApiRequest =
       backendHostPattern.test(host) || // Backend running on configured PORT
       host.startsWith('api.');
-    
+
     if (isBackendApiRequest) {
       // Skip portal validation for direct backend API requests
       return;
@@ -449,7 +451,9 @@ export class AuthService {
       );
     }
 
-    const skipCurrentPasswordCheck = Boolean(isFirstLogin && user.mustChangePassword);
+    const skipCurrentPasswordCheck = Boolean(
+      isFirstLogin && user.mustChangePassword,
+    );
 
     if (!skipCurrentPasswordCheck) {
       if (!currentPassword) {
@@ -475,7 +479,11 @@ export class AuthService {
       },
     });
 
-    await this.activityLogService.logPasswordChange(userId, ipAddress, userAgent);
+    await this.activityLogService.logPasswordChange(
+      userId,
+      ipAddress,
+      userAgent,
+    );
 
     return { status: true, message: 'Password changed successfully' };
   }

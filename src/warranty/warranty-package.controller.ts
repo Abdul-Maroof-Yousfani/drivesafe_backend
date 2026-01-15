@@ -81,7 +81,11 @@ export class WarrantyPackageController {
   ) {
     const dealerId = req.user.role === 'dealer' ? req.user.tenantId : undefined;
     const includePresetsBool =
-      includePresets === 'true' ? true : includePresets === 'false' ? false : undefined;
+      includePresets === 'true'
+        ? true
+        : includePresets === 'false'
+          ? false
+          : undefined;
     const packages = await this.warrantyPackageService.findAll(
       context,
       dealerId,

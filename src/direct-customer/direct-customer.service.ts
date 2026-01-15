@@ -60,15 +60,22 @@ export class DirectCustomerService {
     // Filter packages based on eligibility
     const eligiblePackages = packages.filter((pkg) => {
       // 1. Check vehicle age
-      if (pkg.eligibilityVehicleAgeYearsMax !== null && pkg.eligibilityVehicleAgeYearsMax !== undefined) {
+      if (
+        pkg.eligibilityVehicleAgeYearsMax !== null &&
+        pkg.eligibilityVehicleAgeYearsMax !== undefined
+      ) {
         if (vehicleAge > pkg.eligibilityVehicleAgeYearsMax) {
           return false;
         }
       }
 
       // 2. Check mileage
-      if (pkg.eligibilityMileageValue !== null && pkg.eligibilityMileageValue !== undefined) {
-        const comparator = pkg.eligibilityMileageComparator?.toLowerCase() || '<=';
+      if (
+        pkg.eligibilityMileageValue !== null &&
+        pkg.eligibilityMileageValue !== undefined
+      ) {
+        const comparator =
+          pkg.eligibilityMileageComparator?.toLowerCase() || '<=';
         if (comparator === '<=' || comparator === 'less than or equal to') {
           if (dto.mileage > pkg.eligibilityMileageValue) return false;
         } else if (comparator === '<' || comparator === 'less than') {
@@ -78,7 +85,10 @@ export class DirectCustomerService {
 
       // 3. Check transmission
       if (pkg.eligibilityTransmission && dto.transmission) {
-        if (pkg.eligibilityTransmission.toLowerCase() !== dto.transmission.toLowerCase()) {
+        if (
+          pkg.eligibilityTransmission.toLowerCase() !==
+          dto.transmission.toLowerCase()
+        ) {
           return false;
         }
       }
@@ -119,9 +129,7 @@ export class DirectCustomerService {
     });
 
     if (existingCustomer) {
-      throw new ConflictException(
-        'A customer with this email already exists.',
-      );
+      throw new ConflictException('A customer with this email already exists.');
     }
 
     // Get warranty package
@@ -150,7 +158,10 @@ export class DirectCustomerService {
         warrantyPrice = Number(warrantyPackage.price24Months) || 0;
         break;
       case 36:
-        warrantyPrice = Number(warrantyPackage.price36Months) || Number(warrantyPackage.price) || 0;
+        warrantyPrice =
+          Number(warrantyPackage.price36Months) ||
+          Number(warrantyPackage.price) ||
+          0;
         break;
       default:
         warrantyPrice = Number(warrantyPackage.price) || 0;
@@ -247,9 +258,8 @@ export class DirectCustomerService {
       });
 
       // 7. Snapshot benefits for this sale
-      const benefitItems = warrantyPackage.items?.filter(
-        (item) => item.type === 'benefit',
-      ) || [];
+      const benefitItems =
+        warrantyPackage.items?.filter((item) => item.type === 'benefit') || [];
 
       if (benefitItems.length > 0) {
         await tx.warrantySaleBenefit.createMany({

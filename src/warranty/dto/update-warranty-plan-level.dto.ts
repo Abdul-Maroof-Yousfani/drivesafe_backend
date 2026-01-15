@@ -26,5 +26,3 @@ export class UpdateWarrantyPlanLevelDto {
   @IsString()
   status?: string;
 }
-
-

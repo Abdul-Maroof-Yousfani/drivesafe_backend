@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateWarrantyItemDto } from '../dto/create-warranty-item.dto';
 
@@ -75,5 +75,54 @@ export class WarrantyItemService {
 
     this.logger.log(`Created warranty item ${item.id} (${item.label})`);
     return item;
+  }
+
+  /**
+   * Update a warranty item
+   */
+  async update(id: string, dto: any): Promise<any> {
+    const existing = await this.prisma.warrantyItem.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Warranty item not found');
+    }
+
+    const updated = await this.prisma.warrantyItem.update({
+      where: { id },
+      data: {
+        label: dto.label?.trim() || existing.label,
+        type: dto.type || existing.type,
+        description:
+          dto.description !== undefined
+            ? dto.description?.trim() || null
+            : existing.description,
+        status: dto.status || existing.status,
+      },
+    });
+
+    this.logger.log(`Updated warranty item ${id}`);
+    return updated;
+  }
+
+  /**
+   * Remove a warranty item (soft delete)
+   */
+  async remove(id: string): Promise<void> {
+    const existing = await this.prisma.warrantyItem.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Warranty item not found');
+    }
+
+    await this.prisma.warrantyItem.update({
+      where: { id },
+      data: { status: 'inactive' },
+    });
+
+    this.logger.log(`Soft-deleted warranty item ${id}`);
   }
 }
