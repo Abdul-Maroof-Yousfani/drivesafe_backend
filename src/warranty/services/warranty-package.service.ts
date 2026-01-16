@@ -335,7 +335,161 @@ export class WarrantyPackageService {
       await this.createPackageItems(id, includedFeatures, 'feature');
     }
 
+    // Propagate updates to all tenant (dealer) databases where this package exists
+    await this.propagatePackageUpdateToTenants(id, updated, keyBenefits, includedFeatures);
+
+    await this.activityLog.log({
+      userId,
+      action: 'update',
+      module: 'warranty-packages',
+      entity: 'WarrantyPackage',
+      entityId: id,
+      description: `Updated warranty package: ${updated.name}`,
+      oldValues: existing,
+      newValues: updated,
+    });
+
     return updated;
+  }
+
+  /**
+   * Propagate package updates to all tenant databases where the package exists
+   */
+  private async propagatePackageUpdateToTenants(
+    packageId: string,
+    updated: any,
+    keyBenefits?: string[],
+    includedFeatures?: string[],
+  ): Promise<void> {
+    const dealers = await this.prisma.dealer.findMany({
+      where: { status: 'active', databaseName: { not: null } },
+      select: { id: true, businessNameLegal: true },
+    });
+
+    let propagatedCount = 0;
+
+    for (const dealer of dealers) {
+      try {
+        const tenantPrisma = await this.tenantDb.getTenantPrismaByDealerId(dealer.id);
+
+        // Check if this package exists in the tenant DB
+        const existsInTenant = await tenantPrisma.warrantyPackage.findUnique({
+          where: { id: packageId },
+        });
+
+        if (!existsInTenant) {
+          continue; // Package not assigned to this dealer, skip
+        }
+
+        // Update the package in tenant DB (preserve dealer-specific prices)
+        await tenantPrisma.warrantyPackage.update({
+          where: { id: packageId },
+          data: {
+            name: updated.name,
+            description: updated.description,
+            planLevel: updated.planLevel,
+            eligibility: updated.eligibility,
+            eligibilityMileageComparator: updated.eligibilityMileageComparator,
+            eligibilityMileageValue: updated.eligibilityMileageValue,
+            eligibilityVehicleAgeYearsMax: updated.eligibilityVehicleAgeYearsMax,
+            eligibilityTransmission: updated.eligibilityTransmission,
+            excess: updated.excess,
+            labourRatePerHour: updated.labourRatePerHour,
+            fixedClaimLimit: updated.fixedClaimLimit,
+            price12Months: updated.price12Months,
+            price24Months: updated.price24Months,
+            price36Months: updated.price36Months,
+            // Note: NOT updating dealerPrice12/24/36Months to preserve dealer-specific costs
+            coverageDuration: updated.coverageDuration,
+            durationValue: updated.durationValue,
+            durationUnit: updated.durationUnit,
+            price: updated.price,
+            status: updated.status,
+          },
+        });
+
+        // Sync package items (benefits/features) if they were updated
+        if (keyBenefits !== undefined && Array.isArray(keyBenefits)) {
+          await tenantPrisma.warrantyPackageItem.deleteMany({
+            where: { warrantyPackageId: packageId, type: 'benefit' },
+          });
+          await this.createTenantPackageItems(tenantPrisma, packageId, keyBenefits, 'benefit');
+        }
+
+        if (includedFeatures !== undefined && Array.isArray(includedFeatures)) {
+          await tenantPrisma.warrantyPackageItem.deleteMany({
+            where: { warrantyPackageId: packageId, type: 'feature' },
+          });
+          await this.createTenantPackageItems(tenantPrisma, packageId, includedFeatures, 'feature');
+        }
+
+        propagatedCount++;
+        this.logger.log(`Propagated package ${packageId} to dealer ${dealer.businessNameLegal}`);
+      } catch (err) {
+        this.logger.warn(
+          `Failed to propagate package ${packageId} to tenant ${dealer.id}: ${err.message}`,
+        );
+      }
+    }
+
+    if (propagatedCount > 0) {
+      this.logger.log(`Package ${packageId} propagated to ${propagatedCount} dealer(s)`);
+    }
+  }
+
+  /**
+   * Create package items in a tenant database
+   */
+  private async createTenantPackageItems(
+    tenantPrisma: any,
+    packageId: string,
+    itemIds: string[],
+    type: 'benefit' | 'feature',
+  ): Promise<void> {
+    for (const itemId of itemIds) {
+      // Ensure the WarrantyItem exists in tenant DB
+      const masterItem = await this.prisma.warrantyItem.findUnique({
+        where: { id: itemId },
+      });
+
+      if (!masterItem || masterItem.type !== type || masterItem.status !== 'active') {
+        continue;
+      }
+
+      // Upsert the WarrantyItem in tenant DB
+      await tenantPrisma.warrantyItem.upsert({
+        where: { id: itemId },
+        update: {
+          label: masterItem.label,
+          type: masterItem.type,
+          status: masterItem.status,
+        },
+        create: {
+          id: masterItem.id,
+          label: masterItem.label,
+          description: masterItem.description,
+          type: masterItem.type,
+          status: masterItem.status,
+        },
+      });
+
+      // Create the package item relation
+      await tenantPrisma.warrantyPackageItem.upsert({
+        where: {
+          warrantyPackageId_warrantyItemId_type: {
+            warrantyPackageId: packageId,
+            warrantyItemId: itemId,
+            type,
+          },
+        },
+        update: {},
+        create: {
+          warrantyPackageId: packageId,
+          warrantyItemId: itemId,
+          type,
+        },
+      });
+    }
   }
 
   /**
@@ -549,6 +703,13 @@ export class WarrantyPackageService {
         warrantyPackageId: masterPkg.id,
         coverageStartDate: now,
         coverageEndDate,
+        // Snapshot package info for immutability
+        packageName: masterPkg.name,
+        planLevel: masterPkg.planLevel || null,
+        packageDescription: masterPkg.description || null,
+        packageEligibility: masterPkg.eligibility || null,
+        planMonths: durationMonths,
+        dealerName: dealer.businessNameLegal,
         warrantyPrice,
         excess: excess ?? masterPkg.excess ?? null,
         labourRatePerHour:
@@ -578,6 +739,13 @@ export class WarrantyPackageService {
         warrantyPackageId: tenantPkg.id,
         coverageStartDate: now,
         coverageEndDate,
+        // Snapshot package info for immutability
+        packageName: tenantPkg.name,
+        planLevel: tenantPkg.planLevel || null,
+        packageDescription: tenantPkg.description || null,
+        packageEligibility: tenantPkg.eligibility || null,
+        planMonths: durationMonths,
+        dealerName: dealer.businessNameLegal,
         warrantyPrice: masterSale.warrantyPrice,
         excess: excess ?? tenantPkg.excess ?? null,
         labourRatePerHour:
@@ -721,10 +889,9 @@ export class WarrantyPackageService {
     const items = await client.warrantyItem.findMany({
       where: {
         id: { in: benefitIds },
-        type: 'benefit',
         status: 'active',
       },
-      select: { id: true },
+      select: { id: true, label: true, type: true },
     });
 
     if (!items.length) return;
@@ -733,7 +900,8 @@ export class WarrantyPackageService {
       data: items.map((item) => ({
         warrantySaleId: saleId,
         warrantyItemId: item.id,
-        type: 'benefit',
+        label: item.label,
+        type: item.type || 'benefit',
       })),
       skipDuplicates: true,
     });

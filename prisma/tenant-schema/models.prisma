@@ -662,6 +662,13 @@ model WarrantySale {
   vehicle                 CustomerVehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   coverageStartDate       DateTime
   coverageEndDate         DateTime
+  // Snapshot fields: capture package info at sale time for immutability
+  packageName             String?       // Snapshot of warrantyPackage.name at sale time
+  planLevel               String?       // Snapshot of warrantyPackage.planLevel at sale time
+  packageDescription     String?       // Snapshot of warrantyPackage.description at sale time
+  packageEligibility     String?       // Snapshot of warrantyPackage.eligibility at sale time
+  planMonths              Int?          // Snapshot of duration at sale time
+  dealerName              String?       // Snapshot of dealer name at sale time
   // Per‑assignment override fields (do not alter original package)
   excess                  Decimal?
   labourRatePerHour       Decimal?
@@ -701,7 +708,8 @@ model WarrantySaleBenefit {
   warrantySale   WarrantySale @relation(fields: [warrantySaleId], references: [id], onDelete: Cascade)
   warrantyItemId String
   warrantyItem   WarrantyItem @relation(fields: [warrantyItemId], references: [id])
-  type           String       @default("benefit") // future‑proofing if we ever store features
+  label          String?       // Snapshot of warrantyItem.label at sale time
+  type           String       @default("benefit") // Snapshot of warrantyItem.type at sale time
 
   @@index([warrantySaleId])
   @@index([warrantyItemId])

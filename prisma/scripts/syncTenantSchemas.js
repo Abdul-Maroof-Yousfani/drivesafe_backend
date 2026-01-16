@@ -2,7 +2,7 @@ require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
 const { Pool } = require('pg');
 const { PrismaPg } = require('@prisma/adapter-pg');
-const { execFile } = require('child_process');
+const { exec } = require('child_process');
 const { promisify } = require('util');
 const path = require('path');
 const { generateTenantSchema } = require('./tenantSchemaGenerator');
@@ -52,20 +52,11 @@ async function prismaDbPushTenantSchema({ connectionString }) {
     'prisma',
     'tenant-schema',
   );
-  const execFileAsync = promisify(execFile);
-  const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  const execAsync = promisify(exec);
 
-  // Prisma 7 no longer supports --skip-generate for db push
-  const args = [
-    'prisma',
-    'db',
-    'push',
-    '--schema',
-    tenantSchemaPath,
-    '--accept-data-loss',
-  ];
+  const command = `npx prisma db push --schema "${tenantSchemaPath}" --accept-data-loss`;
 
-  await execFileAsync(npxCmd, args, {
+  await execAsync(command, {
     cwd: process.cwd(),
     env: {
       ...process.env,

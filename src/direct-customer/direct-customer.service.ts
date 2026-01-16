@@ -242,6 +242,13 @@ export class DirectCustomerService {
           warrantyPackageId: warrantyPackage.id,
           coverageStartDate: now,
           coverageEndDate,
+          // Snapshot package info for immutability
+          packageName: warrantyPackage.name,
+          planLevel: warrantyPackage.planLevel || null,
+          packageDescription: warrantyPackage.description || null,
+          packageEligibility: warrantyPackage.eligibility || null,
+          planMonths: duration,
+          dealerName: "Drive Safe", // Direct purchases are from SA
           warrantyPrice,
           price12Months: warrantyPackage.price12Months,
           price24Months: warrantyPackage.price24Months,
@@ -257,16 +264,16 @@ export class DirectCustomerService {
         },
       });
 
-      // 7. Snapshot benefits for this sale
-      const benefitItems =
-        warrantyPackage.items?.filter((item) => item.type === 'benefit') || [];
+      // 7. Snapshot all items (benefits and features) for this sale
+      const packageItems = warrantyPackage.items || [];
 
-      if (benefitItems.length > 0) {
+      if (packageItems.length > 0) {
         await tx.warrantySaleBenefit.createMany({
-          data: benefitItems.map((item) => ({
+          data: packageItems.map((item) => ({
             warrantySaleId: warrantySale.id,
             warrantyItemId: item.warrantyItemId,
-            type: 'benefit',
+            label: item.warrantyItem?.label || 'Item',
+            type: item.type || 'benefit',
           })),
           skipDuplicates: true,
         });

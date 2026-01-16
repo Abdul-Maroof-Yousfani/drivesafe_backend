@@ -767,7 +767,6 @@ export class DealerService {
       process.cwd(),
       'prisma',
       'tenant-schema',
-      'base.prisma',
     );
     const isWindows = process.platform === 'win32';
 
@@ -776,9 +775,9 @@ export class DealerService {
     let command: string;
     // Quote the path to handle spaces
     if (isWindows) {
-      command = `npx prisma db push --schema "${tenantSchemaPath}" --accept-data-loss --skip-generate`;
+      command = `npx prisma db push --schema "${tenantSchemaPath}" --accept-data-loss`;
     } else {
-      command = `npx prisma db push --schema "${tenantSchemaPath}" --accept-data-loss --skip-generate`;
+      command = `npx prisma db push --schema "${tenantSchemaPath}" --accept-data-loss`;
     }
 
     try {

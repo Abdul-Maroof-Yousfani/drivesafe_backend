@@ -21,9 +21,9 @@ export class UpdateVehicleDto {
   @IsOptional()
   registrationNumber?: string;
 
-  @IsString()
+  @IsNumber()
   @IsOptional()
-  mileage?: string;
+  mileage?: number;
 
   @IsOptional()
   @IsEnum(['manual', 'automatic'])

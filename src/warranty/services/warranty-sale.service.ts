@@ -86,6 +86,24 @@ export class WarrantySaleService {
     const safeNumber = (val: any) =>
       val !== undefined && val !== null && val !== '' ? Number(val) : null;
 
+    // IMPORTANT: Snapshot package values at sale time for immutability
+    // If DTO doesn't provide override values, use package defaults
+    const snapshotExcess = safeNumber(excess) ?? safeNumber(pkg.excess);
+    const snapshotLabourRate = safeNumber(labourRatePerHour) ?? safeNumber(pkg.labourRatePerHour);
+    const snapshotClaimLimit = safeNumber(fixedClaimLimit) ?? safeNumber(pkg.fixedClaimLimit);
+    const snapshotPrice12 = safeNumber(price12Months) ?? safeNumber(pkg.price12Months);
+    const snapshotPrice24 = safeNumber(price24Months) ?? safeNumber(pkg.price24Months);
+    const snapshotPrice36 = safeNumber(price36Months) ?? safeNumber(pkg.price36Months);
+    
+    let dealerNameSnapshot: string | null = null;
+    if (dealerId) {
+      const dbDealer = await this.prisma.dealer.findUnique({
+        where: { id: dealerId },
+        select: { businessNameLegal: true }
+      });
+      dealerNameSnapshot = dbDealer?.businessNameLegal || null;
+    }
+
     const sale = await this.prisma.warrantySale.create({
       data: {
         customerId,
@@ -94,13 +112,20 @@ export class WarrantySaleService {
         warrantyPackageId,
         coverageStartDate,
         coverageEndDate,
+        // Snapshot package info for immutability
+        packageName: pkg.name,
+        planLevel: pkg.planLevel || null,
+        packageDescription: pkg.description || null,
+        packageEligibility: pkg.eligibility || null,
+        planMonths: durationMonths,
+        dealerName: dealerNameSnapshot,
         warrantyPrice: safeNumber(price) || 0,
-        excess: safeNumber(excess),
-        labourRatePerHour: safeNumber(labourRatePerHour),
-        fixedClaimLimit: safeNumber(fixedClaimLimit),
-        price12Months: durationMonths === 12 ? safeNumber(price12Months) : null,
-        price24Months: durationMonths === 24 ? safeNumber(price24Months) : null,
-        price36Months: durationMonths === 36 ? safeNumber(price36Months) : null,
+        excess: snapshotExcess,
+        labourRatePerHour: snapshotLabourRate,
+        fixedClaimLimit: snapshotClaimLimit,
+        price12Months: snapshotPrice12,
+        price24Months: snapshotPrice24,
+        price36Months: snapshotPrice36,
         paymentMethod: paymentMethod || 'admin_assignment',
         saleDate: now,
         customerConsent: customerConsent === true,
@@ -115,13 +140,21 @@ export class WarrantySaleService {
       include: {
         customer: true,
         dealer: true,
-        warrantyPackage: true,
+        warrantyPackage: {
+          include: {
+            items: true,
+          },
+        },
       },
     });
 
-    // Snapshot selected benefits for this sale (if provided)
-    if (Array.isArray(includedBenefits) && includedBenefits.length > 0) {
-      await this.syncSaleBenefits(this.prisma, sale.id, includedBenefits);
+    // Snapshot selected benefits (override) or all package benefits (default)
+    const itemsToSnapshot = (Array.isArray(includedBenefits) && includedBenefits.length > 0)
+      ? includedBenefits
+      : sale.warrantyPackage.items.map(item => item.warrantyItemId);
+
+    if (itemsToSnapshot.length > 0) {
+      await this.syncSaleBenefits(this.prisma, sale.id, itemsToSnapshot);
     }
 
     // [NEW] Create Invoice for master sale
@@ -241,6 +274,13 @@ export class WarrantySaleService {
           ? Number(pkg.price24Months) || 0
           : Number(pkg.price36Months) || Number(pkg.price) || 0;
 
+    // Fetch dealer name for snapshot
+    const dbDealer = await this.prisma.dealer.findUnique({
+      where: { id: dealerId },
+      select: { businessNameLegal: true }
+    });
+    const dealerNameSnapshot = dbDealer?.businessNameLegal || null;
+
     const tenantSale = await client.warrantySale.create({
       data: {
         customerId,
@@ -250,6 +290,13 @@ export class WarrantySaleService {
         warrantyPackageId,
         coverageStartDate,
         coverageEndDate,
+        // Snapshot package info for immutability
+        packageName: pkg.name,
+        planLevel: pkg.planLevel || null,
+        packageDescription: pkg.description || null,
+        packageEligibility: pkg.eligibility || null,
+        planMonths: durationMonths,
+        dealerName: dealerNameSnapshot,
         warrantyPrice: fixedCustomerPrice,
         excess: pkg.excess ?? null,
         labourRatePerHour: pkg.labourRatePerHour ?? null,
@@ -272,13 +319,21 @@ export class WarrantySaleService {
       include: {
         customer: true,
         vehicle: true,
-        warrantyPackage: true,
+        warrantyPackage: {
+          include: {
+            items: true,
+          },
+        },
       },
     });
 
-    // Snapshot selected benefits for this dealer sale (if provided)
-    if (Array.isArray(includedBenefits) && includedBenefits.length > 0) {
-      await this.syncSaleBenefits(client, tenantSale.id, includedBenefits);
+    // Snapshot selected benefits (override) or all package benefits (default)
+    const itemsToSnapshot = (Array.isArray(includedBenefits) && includedBenefits.length > 0)
+      ? includedBenefits
+      : tenantSale.warrantyPackage.items.map(item => item.warrantyItemId);
+
+    if (itemsToSnapshot.length > 0) {
+      await this.syncSaleBenefits(client, tenantSale.id, itemsToSnapshot);
     }
 
     // Create invoice in tenant DB
@@ -410,6 +465,11 @@ export class WarrantySaleService {
         customer: true,
         vehicle: true,
         warrantyPackage: true,
+        benefits: {
+          include: {
+            warrantyItem: true,
+          },
+        },
       },
     });
   }
@@ -698,6 +758,11 @@ export class WarrantySaleService {
                 },
               },
             },
+            benefits: {
+              include: {
+                warrantyItem: true,
+              },
+            },
             vehicle: true,
             dealer: {
               select: {
@@ -764,6 +829,11 @@ export class WarrantySaleService {
                 items: {
                   include: { warrantyItem: true },
                 },
+              },
+            },
+            benefits: {
+              include: {
+                warrantyItem: true,
               },
             },
             vehicle: true,
@@ -915,15 +985,12 @@ export class WarrantySaleService {
     throw new NotFoundException('Warranty sale not found');
   }
 
-  /**
-   * Helper: snapshot selected benefits for a sale into WarrantySaleBenefit
-   */
   private async syncSaleBenefits(
     client: any,
     saleId: string,
-    benefitIds: string[],
+    itemIds: string[],
   ): Promise<void> {
-    if (!benefitIds.length) return;
+    if (!itemIds.length) return;
 
     // Clear existing mappings
     await client.warrantySaleBenefit.deleteMany({
@@ -932,11 +999,10 @@ export class WarrantySaleService {
 
     const items = await client.warrantyItem.findMany({
       where: {
-        id: { in: benefitIds },
-        type: 'benefit',
+        id: { in: itemIds },
         status: 'active',
       },
-      select: { id: true },
+      select: { id: true, type: true, label: true },
     });
 
     if (!items.length) return;
@@ -945,7 +1011,8 @@ export class WarrantySaleService {
       data: items.map((item) => ({
         warrantySaleId: saleId,
         warrantyItemId: item.id,
-        type: 'benefit',
+        label: item.label,
+        type: item.type || 'benefit',
       })),
       skipDuplicates: true,
     });
