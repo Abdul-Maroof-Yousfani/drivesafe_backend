@@ -18,13 +18,14 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "prisma:generate": "node prisma/scripts/tenantSchemaGenerator.js && prisma generate --schema=prisma/schema && prisma generate --schema=prisma/tenant-schem",
+    "prisma:generate": "node prisma/scripts/tenantSchemaGenerator.js && prisma generate --schema=prisma/schema && prisma generate --schema=prisma/tenant-schema",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:push": "prisma db push",
     "prisma:seed": "prisma db seed",
     "prisma:deploy": "prisma generate && prisma migrate dev && prisma db push",
-    "tenants:sync": "node prisma/scripts/syncTenantSchemas.js"
+    "tenants:sync": "node prisma/scripts/syncTenantSchemas.js",
+    "prisma:full-sync": "npm run prisma:generate && prisma db push --schema=prisma/schema --accept-data-loss && npm run tenants:sync"
   },
   "prisma": {
     "seed": "node prisma/seed.js",
