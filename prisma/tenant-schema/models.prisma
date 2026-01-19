@@ -508,6 +508,8 @@ model Dealer {
   
   customers               Customer[]
   warrantySales           WarrantySale[]
+ 
+  warrantyAssignments     WarrantyAssignment[]
   invoiceTemplate         InvoiceTemplate?
   invoices                Invoice[]                @relation("DealerInvoices")
   dealerStorage           DealerStorage?
@@ -605,6 +607,7 @@ model WarrantyPackage {
   updatedAt         DateTime  @updatedAt
   
   warrantySales     WarrantySale[]
+  warrantyAssignments WarrantyAssignment[]
   items             WarrantyPackageItem[]
   
   @@index([isPreset])
@@ -656,31 +659,37 @@ model WarrantySale {
   dealerId                String?
   dealer                  Dealer?       @relation(fields: [dealerId], references: [id], onDelete: SetNull)
   salesRepresentativeName String?
+
   warrantyPackageId       String
   warrantyPackage         WarrantyPackage @relation(fields: [warrantyPackageId], references: [id])
   vehicleId               String?
   vehicle                 CustomerVehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   coverageStartDate       DateTime
   coverageEndDate         DateTime
+  
   // Snapshot fields: capture package info at sale time for immutability
-  packageName             String?       // Snapshot of warrantyPackage.name at sale time
-  planLevel               String?       // Snapshot of warrantyPackage.planLevel at sale time
-  packageDescription     String?       // Snapshot of warrantyPackage.description at sale time
-  packageEligibility     String?       // Snapshot of warrantyPackage.eligibility at sale time
-  planMonths              Int?          // Snapshot of duration at sale time
-  dealerName              String?       // Snapshot of dealer name at sale time
-  // Per‑assignment override fields (do not alter original package)
+  packageName             String
+  planLevel               String?
+  packageDescription      String?
+  packageEligibility      String?
+  planMonths              Int
+  dealerName              String?       // Capture dealer name at sale time
+  
+  warrantyPrice           Decimal
   excess                  Decimal?
   labourRatePerHour       Decimal?
   fixedClaimLimit         Decimal?
+  
+  // Snapshotted package prices at sale
   price12Months           Decimal?
   price24Months           Decimal?
   price36Months           Decimal?
+
   // Dealer cost fields (for margin visibility)
   dealerCost12Months      Decimal?
   dealerCost24Months      Decimal?
   dealerCost36Months      Decimal?
-  warrantyPrice           Decimal
+  
   paymentMethod           String
   saleDate                DateTime
   customerConsent         Boolean       @default(false)
@@ -698,8 +707,32 @@ model WarrantySale {
   @@index([customerId])
   @@index([vehicleId])
   @@index([dealerId])
+  
   @@index([policyNumber])
   @@index([saleDate])
+}
+
+model WarrantyAssignment {
+  id                String          @id @default(cuid())
+  dealerId          String
+  dealer            Dealer          @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  warrantyPackageId String
+  warrantyPackage   WarrantyPackage @relation(fields: [warrantyPackageId], references: [id])
+  
+  price             Decimal
+  dealerPrice12Months Decimal?
+  dealerPrice24Months Decimal?
+  dealerPrice36Months Decimal?
+  
+  paymentMethod     String?
+  assignedAt        DateTime        @default(now())
+  
+  assignedById      String?
+
+  invoices          Invoice[]
+
+  @@index([dealerId])
+  @@index([warrantyPackageId])
 }
 
 model WarrantySaleBenefit {
@@ -718,8 +751,10 @@ model WarrantySaleBenefit {
 model Invoice {
   id              String       @id @default(cuid())
   invoiceNumber   String       @unique
-  warrantySaleId  String
-  warrantySale    WarrantySale @relation(fields: [warrantySaleId], references: [id], onDelete: Cascade)
+  warrantySaleId  String?
+  warrantySale    WarrantySale? @relation(fields: [warrantySaleId], references: [id], onDelete: Cascade)
+  warrantyAssignmentId String?
+  warrantyAssignment WarrantyAssignment? @relation(fields: [warrantyAssignmentId], references: [id], onDelete: Cascade)
   dealerId        String?
   dealer          Dealer?      @relation("DealerInvoices", fields: [dealerId], references: [id], onDelete: SetNull)
   amount          Decimal      // Amount dealer owes to SA (dealer cost)

@@ -236,6 +236,7 @@ export class InvoiceService {
       invoice = await client.invoice.findUnique({
         where: { id },
         include: {
+          dealer: true,
           warrantySale: {
             include: {
               customer: true,

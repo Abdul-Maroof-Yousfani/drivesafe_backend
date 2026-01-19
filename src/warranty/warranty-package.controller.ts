@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
   Req,
+  Patch,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -25,6 +26,7 @@ import {
   CreateWarrantyPackageDto,
   UpdateWarrantyPackageDto,
   AssignPackageToDealerDto,
+  UpdateWarrantyAssignmentDto,
 } from './dto';
 
 interface RequestWithUser extends Request {
@@ -156,6 +158,53 @@ export class WarrantyPackageController {
       status: true,
       message: 'Warranty package assigned to Dealer Successfully',
       data: result,
+    };
+  }
+
+  @Get('assignments/list') // Specific path to avoid conflict with :id
+  @Roles('super_admin', 'admin', 'dealer')
+  @ApiOperation({ summary: 'Get all warranty assignments' })
+  async findAllAssignments(
+    @Query('dealerId') dealerId: string | undefined,
+    @Req() req: RequestWithUser,
+  ) {
+    // If dealer, enforce their own ID
+    const effectiveDealerId = req.user.role === 'dealer' ? req.user.tenantId : dealerId;
+    
+    const assignments = await this.warrantyPackageService.findAllAssignments(
+      effectiveDealerId,
+    );
+    return {
+      status: true,
+      data: assignments,
+    };
+  }
+
+  @Get('assignments/:id')
+  @Roles('super_admin', 'admin', 'dealer')
+  @ApiOperation({ summary: 'Get single warranty assignment' })
+  async findOneAssignment(@Param('id') id: string) {
+    const assignment = await this.warrantyPackageService.findOneAssignment(id);
+    return {
+      status: true,
+      data: assignment,
+    };
+  }
+
+  @Patch('assignments/:id')
+  @Roles('super_admin', 'admin')
+  @ApiOperation({ summary: 'Update warranty assignment' })
+  async updateAssignment(
+    @Param('id') id: string,
+    @Body() dto: UpdateWarrantyAssignmentDto,
+  ) {
+    const assignment = await this.warrantyPackageService.updateAssignment(
+      id,
+      dto,
+    );
+    return {
+      status: true,
+      data: assignment,
     };
   }
 }

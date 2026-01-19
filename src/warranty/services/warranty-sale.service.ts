@@ -126,6 +126,9 @@ export class WarrantySaleService {
         price12Months: snapshotPrice12,
         price24Months: snapshotPrice24,
         price36Months: snapshotPrice36,
+        dealerCost12Months: pkg.dealerPrice12Months ?? null,
+        dealerCost24Months: pkg.dealerPrice24Months ?? null,
+        dealerCost36Months: pkg.dealerPrice36Months ?? null,
         paymentMethod: paymentMethod || 'admin_assignment',
         saleDate: now,
         customerConsent: customerConsent === true,
@@ -290,6 +293,7 @@ export class WarrantySaleService {
         warrantyPackageId,
         coverageStartDate,
         coverageEndDate,
+        // Snapshot package info for immutability
         // Snapshot package info for immutability
         packageName: pkg.name,
         planLevel: pkg.planLevel || null,
