@@ -243,6 +243,7 @@ export class DirectCustomerService {
           coverageStartDate: now,
           coverageEndDate,
           // Snapshot package info for immutability
+          // Snapshot package info for immutability
           packageName: warrantyPackage.name,
           planLevel: warrantyPackage.planLevel || null,
           packageDescription: warrantyPackage.description || null,

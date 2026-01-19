@@ -60,6 +60,7 @@ model User {
   dealersCreated              Dealer[]            @relation("DealerCreatedBy")
   warrantyPackagesCreated     WarrantyPackage[]   @relation("WarrantyPackageCreatedBy")
   warrantySalesCreated        WarrantySale[]       @relation("WarrantySaleCreatedBy")
+  warrantyAssignments         WarrantyAssignment[] @relation("WarrantyAssignmentAssignedBy")
   invoicesCreated             Invoice[]           @relation("InvoiceCreatedBy")
   uploadedDocuments           CustomerDocument[]  @relation("DocumentUploadedBy")
 }

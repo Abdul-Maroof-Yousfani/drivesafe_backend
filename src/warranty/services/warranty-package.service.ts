@@ -11,6 +11,7 @@ import {
   CreateWarrantyPackageDto,
   UpdateWarrantyPackageDto,
   AssignPackageToDealerDto,
+  UpdateWarrantyAssignmentDto,
 } from '../dto';
 import { randomUUID } from 'crypto';
 
@@ -682,11 +683,9 @@ export class WarrantyPackageService {
       });
     }
 
-    // Create warranty sale record in master
+    // Create WarrantyAssignment in Master DB
     const now = new Date();
     const durationMonths = duration || masterPkg.coverageDuration || 12;
-    const coverageEndDate = new Date(now);
-    coverageEndDate.setMonth(coverageEndDate.getMonth() + durationMonths);
 
     const warrantyPrice =
       durationMonths === 12
@@ -695,96 +694,39 @@ export class WarrantyPackageService {
           ? Number(masterPkg.price24Months) || 0
           : Number(masterPkg.price36Months) || Number(masterPkg.price) || 0;
 
-    const masterSale = await this.prisma.warrantySale.create({
+    const masterAssignment = await this.prisma.warrantyAssignment.create({
       data: {
-        customerId: null,
         dealerId: dealer.id,
-        salesRepresentativeName: null,
         warrantyPackageId: masterPkg.id,
-        coverageStartDate: now,
-        coverageEndDate,
-        // Snapshot package info for immutability
-        packageName: masterPkg.name,
-        planLevel: masterPkg.planLevel || null,
-        packageDescription: masterPkg.description || null,
-        packageEligibility: masterPkg.eligibility || null,
-        planMonths: durationMonths,
-        dealerName: dealer.businessNameLegal,
-        warrantyPrice,
-        excess: excess ?? masterPkg.excess ?? null,
-        labourRatePerHour:
-          labourRatePerHour ?? masterPkg.labourRatePerHour ?? null,
-        fixedClaimLimit: fixedClaimLimit ?? masterPkg.fixedClaimLimit ?? null,
-        price12Months: masterPkg.price12Months ?? null,
-        price24Months: masterPkg.price24Months ?? null,
-        price36Months: masterPkg.price36Months ?? null,
-        dealerCost12Months: dealerPrice12Months ?? null,
-        dealerCost24Months: dealerPrice24Months ?? null,
-        dealerCost36Months: dealerPrice36Months ?? null,
+        price: warrantyPrice,
+        dealerPrice12Months: dealerPrice12Months ?? null,
+        dealerPrice24Months: dealerPrice24Months ?? null,
+        dealerPrice36Months: dealerPrice36Months ?? null,
         paymentMethod: 'dealer_assignment',
-        saleDate: now,
-        policyNumber: `DLR-${dealer.id.slice(0, 6)}-${Date.now()}`,
-        status: 'active',
-        createdById: userId,
+        assignedAt: now,
+        assignedById: userId,
       },
     });
 
-    // Mirror sale in tenant DB
-    const tenantSale = await tenantPrisma.warrantySale.create({
+    // Create WarrantyAssignment in Tenant DB
+    await tenantPrisma.warrantyAssignment.create({
       data: {
-        id: masterSale.id,
-        customerId: null,
+        id: masterAssignment.id,
         dealerId: dealer.id,
-        salesRepresentativeName: null,
         warrantyPackageId: tenantPkg.id,
-        coverageStartDate: now,
-        coverageEndDate,
-        // Snapshot package info for immutability
-        packageName: tenantPkg.name,
-        planLevel: tenantPkg.planLevel || null,
-        packageDescription: tenantPkg.description || null,
-        packageEligibility: tenantPkg.eligibility || null,
-        planMonths: durationMonths,
-        dealerName: dealer.businessNameLegal,
-        warrantyPrice: masterSale.warrantyPrice,
-        excess: excess ?? tenantPkg.excess ?? null,
-        labourRatePerHour:
-          labourRatePerHour ?? tenantPkg.labourRatePerHour ?? null,
-        fixedClaimLimit: fixedClaimLimit ?? tenantPkg.fixedClaimLimit ?? null,
-        price12Months: tenantPkg.price12Months ?? null,
-        price24Months: tenantPkg.price24Months ?? null,
-        price36Months: tenantPkg.price36Months ?? null,
-        dealerCost12Months: dealerPrice12Months ?? null,
-        dealerCost24Months: dealerPrice24Months ?? null,
-        dealerCost36Months: dealerPrice36Months ?? null,
+        price: warrantyPrice,
+        dealerPrice12Months: dealerPrice12Months ?? null,
+        dealerPrice24Months: dealerPrice24Months ?? null,
+        dealerPrice36Months: dealerPrice36Months ?? null,
         paymentMethod: 'dealer_assignment',
-        saleDate: now,
-        policyNumber: masterSale.policyNumber,
-        status: 'active',
-        createdById: userId,
+        assignedAt: now,
+        assignedById: userId,
       },
     });
 
     // Snapshot selected benefits for this assignment (use explicit list or all package benefits)
-    const benefitIdsToUse =
-      Array.isArray(includedBenefits) && includedBenefits.length > 0
-        ? includedBenefits
-        : masterPackageItems
-            .filter((item) => item.type === 'benefit')
-            .map((item) => item.warrantyItemId);
-
-    if (benefitIdsToUse.length > 0) {
-      await this.syncSaleBenefitsForAssignment(
-        this.prisma,
-        masterSale.id,
-        benefitIdsToUse,
-      );
-      await this.syncSaleBenefitsForAssignment(
-        tenantPrisma,
-        tenantSale.id,
-        benefitIdsToUse,
-      );
-    }
+    // This logic is no longer needed as benefits are not directly tied to assignments in the same way as sales.
+    // The package items themselves define the benefits.
 
     // Create invoice record in master for the assignment
     if (warrantyPrice > 0) {
@@ -797,20 +739,18 @@ export class WarrantyPackageService {
           data: {
             id: randomUUID(),
             invoiceNumber,
-            warrantySaleId: masterSale.id,
+            warrantyAssignmentId: masterAssignment.id, // Link to assignment, not sale
             dealerId: dealer.id,
             amount: warrantyPrice,
             status: 'pending',
             invoiceDate: now,
             dueDate,
-            paymentMethod: 'dealer_assignment',
             createdById: userId,
           },
         });
-      } catch (invoiceError) {
-        this.logger.warn(
-          `Failed to create assignment invoice in master: ${invoiceError.message}`,
-        );
+      } catch (err) {
+        this.logger.error(`Failed to create invoice for assignment: ${err.message}`);
+        // Consider whether to rollback here, but for now just log
       }
     }
 
@@ -824,15 +764,14 @@ export class WarrantyPackageService {
       newValues: {
         dealerId: dealer.id,
         tenantPackageId: tenantPkg.id,
-        warrantySaleId: masterSale.id,
+        warrantyAssignmentId: masterAssignment.id,
       },
     });
 
     return {
       masterPackage: masterPkg,
       dealerPackage: tenantPkg,
-      masterSale,
-      tenantSale,
+      masterAssignment,
     };
   }
 
@@ -905,5 +844,123 @@ export class WarrantyPackageService {
       })),
       skipDuplicates: true,
     });
+  }
+  /**
+   * Get all warranty assignments
+   */
+  async findAllAssignments(dealerId?: string): Promise<any[]> {
+    const where: any = {};
+    if (dealerId) {
+      where.dealerId = dealerId;
+    }
+
+    return this.prisma.warrantyAssignment.findMany({
+      where,
+      include: {
+        dealer: {
+            select: {
+                id: true,
+                businessNameLegal: true,
+                businessNameTrading: true,
+                email: true,
+                phone: true,
+            }
+        },
+        warrantyPackage: true,
+      },
+      orderBy: { assignedAt: 'desc' },
+    });
+  }
+
+  /**
+   * Get single warranty assignment by ID
+   */
+  async findOneAssignment(id: string): Promise<any> {
+    const assignment = await this.prisma.warrantyAssignment.findUnique({
+      where: { id },
+      include: {
+        dealer: {
+            select: {
+                id: true,
+                businessNameLegal: true,
+                businessNameTrading: true,
+                email: true,
+                phone: true,
+                businessAddress: true,
+            }
+        },
+        warrantyPackage: {
+            include: {
+                items: {
+                    include: {
+                        warrantyItem: true
+                    }
+                }
+            }
+        },
+      },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException('Warranty assignment not found');
+    }
+
+    return assignment;
+  }
+
+  async updateAssignment(id: string, dto: UpdateWarrantyAssignmentDto) {
+    const assignment = await this.prisma.warrantyAssignment.findUnique({
+      where: { id },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException('Warranty assignment not found');
+    }
+
+    const updateData: any = {};
+    if (dto.dealerPrice12Months !== undefined)
+      updateData.dealerPrice12Months = dto.dealerPrice12Months;
+    if (dto.dealerPrice24Months !== undefined)
+      updateData.dealerPrice24Months = dto.dealerPrice24Months;
+    if (dto.dealerPrice36Months !== undefined)
+      updateData.dealerPrice36Months = dto.dealerPrice36Months;
+    if (dto.price !== undefined) updateData.price = dto.price;
+
+    const updatedAssignment = await this.prisma.warrantyAssignment.update({
+      where: { id },
+      data: updateData,
+    });
+
+    // Sync to tenant
+    const tenantPrisma = await this.tenantDb.getTenantPrismaByDealerId(
+      assignment.dealerId,
+    );
+
+    // Update tenant assignment
+    await tenantPrisma.warrantyAssignment.update({
+      where: { id },
+      data: updateData,
+    });
+
+    // Update tenant package dealer prices
+    await tenantPrisma.warrantyPackage.update({
+      where: { id: assignment.warrantyPackageId },
+      data: {
+        dealerPrice12Months:
+          dto.dealerPrice12Months !== undefined
+            ? dto.dealerPrice12Months
+            : undefined,
+        dealerPrice24Months:
+          dto.dealerPrice24Months !== undefined
+            ? dto.dealerPrice24Months
+            : undefined,
+        dealerPrice36Months:
+          dto.dealerPrice36Months !== undefined
+            ? dto.dealerPrice36Months
+            : undefined,
+      },
+    });
+
+    return updatedAssignment;
   }
 }
