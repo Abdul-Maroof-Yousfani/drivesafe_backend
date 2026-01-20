@@ -163,6 +163,7 @@ model WarrantyPackage {
   createdBy         User?     @relation("WarrantyPackageCreatedBy", fields: [createdById], references: [id])
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
   
   warrantySales     WarrantySale[]
   warrantyAssignments WarrantyAssignment[]

@@ -39,12 +39,33 @@ export class DashboardService {
         this.prisma.warrantyPackage.count(),
         this.prisma.dealer.findMany({
           where: { status: 'active' },
-          select: { id: true },
+          select: { id: true, businessNameLegal: true, businessNameTrading: true },
         }),
       ]);
 
-      // Aggregate dealer invoices across all tenant databases
-      const dealerInvoiceAggs = await Promise.all(
+      // Package Name Mapping for aggregation
+      const allMasterPackages = await this.prisma.warrantyPackage.findMany({
+        select: { id: true, name: true },
+      });
+      const masterPackageMap = new Map(allMasterPackages.map((p) => [p.id, p.name]));
+
+      // Aggregate SA direct package sales
+      const packageAnalytics: Record<string, number> = {};
+      const saSalesPerPackage = await this.prisma.warrantySale.groupBy({
+        by: ['warrantyPackageId'],
+        _count: { id: true },
+        where: { dealerId: null },
+      });
+
+      saSalesPerPackage.forEach((s) => {
+        const name = masterPackageMap.get(s.warrantyPackageId) || 'Unknown';
+        packageAnalytics[name] = (packageAnalytics[name] || 0) + s._count.id;
+      });
+
+      // Aggregate dealer invoices and package sales across all tenant databases
+      const dealerAnalytics: Array<{ name: string; revenue: number }> = [];
+
+      const dealerAggs = await Promise.all(
         dealers.map(async (dealer) => {
           try {
             const mapping = await this.prisma.tenantDatabaseMapping.findFirst({
@@ -52,14 +73,14 @@ export class DashboardService {
             });
 
             if (!mapping || !mapping.databaseUrl) {
-              return { totalAmount: 0, pendingCount: 0, pendingAmount: 0 };
+              return { totalAmount: 0, pendingCount: 0, pendingAmount: 0, packageSales: [] };
             }
 
             const pool = new Pool({ connectionString: mapping.databaseUrl });
             const client = await pool.connect();
 
             try {
-              const [totalAmountRes, pendingCountRes, pendingAmountRes] =
+              const [totalAmountRes, pendingCountRes, pendingAmountRes, packageSalesRes] =
                 await Promise.all([
                   client.query(
                     'SELECT SUM("amount") as sum FROM "Invoice" WHERE "dealerId" = $1 AND "paymentMethod" != $2',
@@ -73,12 +94,27 @@ export class DashboardService {
                     'SELECT SUM("amount") as sum FROM "Invoice" WHERE "dealerId" = $1 AND "status" = $2 AND "paymentMethod" != $3',
                     [dealer.id, 'pending', 'dealer_assignment'],
                   ),
+                  // Get package sales counts from tenant
+                  client.query(
+                    'SELECT p."name", COUNT(s."id") as count ' +
+                    'FROM "WarrantySale" s ' +
+                    'JOIN "WarrantyPackage" p ON s."warrantyPackageId" = p."id" ' +
+                    'WHERE s."customerId" IS NOT NULL ' +
+                    'GROUP BY p."name"'
+                  ),
                 ]);
 
+              const revenue = Number(totalAmountRes.rows[0]?.sum || 0);
+              dealerAnalytics.push({
+                name: dealer.businessNameTrading || dealer.businessNameLegal,
+                revenue,
+              });
+
               return {
-                totalAmount: Number(totalAmountRes.rows[0]?.sum || 0),
+                totalAmount: revenue,
                 pendingCount: parseInt(pendingCountRes.rows[0]?.count || '0'),
                 pendingAmount: Number(pendingAmountRes.rows[0]?.sum || 0),
+                packageSales: packageSalesRes.rows,
               };
             } finally {
               client.release();
@@ -88,23 +124,40 @@ export class DashboardService {
             this.logger.warn(
               `Failed tenant aggregation for dealer ${dealer.id}: ${err?.message || err}`,
             );
-            return { totalAmount: 0, pendingCount: 0, pendingAmount: 0 };
+            return { totalAmount: 0, pendingCount: 0, pendingAmount: 0, packageSales: [] };
           }
         }),
       );
 
-      const dealerTotalRevenue = dealerInvoiceAggs.reduce(
+      // Merge tenant package sales into global packageAnalytics
+      dealerAggs.forEach((agg) => {
+        agg.packageSales.forEach((s: any) => {
+          packageAnalytics[s.name] = (packageAnalytics[s.name] || 0) + parseInt(s.count);
+        });
+      });
+
+      const dealerTotalRevenue = dealerAggs.reduce(
         (sum, x) => sum + (Number(x.totalAmount) || 0),
         0,
       );
-      const pendingInvoicesCount = dealerInvoiceAggs.reduce(
+      const pendingInvoicesCount = dealerAggs.reduce(
         (sum, x) => sum + (Number(x.pendingCount) || 0),
         0,
       );
-      const pendingInvoicesAmount = dealerInvoiceAggs.reduce(
+      const pendingInvoicesAmount = dealerAggs.reduce(
         (sum, x) => sum + (Number(x.pendingAmount) || 0),
         0,
       );
+
+      // Format Chart Data
+      const topPackages = Object.entries(packageAnalytics)
+        .map(([name, sales]) => ({ name, sales }))
+        .sort((a, b) => b.sales - a.sales)
+        .slice(0, 5);
+
+      const topDealers = dealerAnalytics
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5);
 
       // Recent sales
       const recentSales = await this.prisma.warrantySale.findMany({
@@ -142,6 +195,8 @@ export class DashboardService {
           pendingInvoicesAmount,
           totalPackages: packagesCount,
           recentCustomers,
+          topPackages,
+          topDealers,
         },
       };
     } catch (error: any) {

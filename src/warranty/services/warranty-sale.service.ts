@@ -73,8 +73,14 @@ export class WarrantySaleService {
     const pkg = await this.prisma.warrantyPackage.findUnique({
       where: { id: warrantyPackageId },
     });
-    if (!pkg) {
+    if (!pkg || pkg.deletedAt) {
       throw new NotFoundException('Warranty package not found');
+    }
+
+    if (pkg.status !== 'active') {
+      throw new BadRequestException(
+        'This warranty package is currently inactive and cannot be sold.',
+      );
     }
 
     const now = new Date();
@@ -244,9 +250,15 @@ export class WarrantySaleService {
     const pkg = await client.warrantyPackage.findUnique({
       where: { id: warrantyPackageId },
     });
-    if (!pkg) {
+    if (!pkg || pkg.deletedAt) {
       throw new NotFoundException(
         'Warranty package not found in dealer database',
+      );
+    }
+
+    if (pkg.status !== 'active') {
+      throw new BadRequestException(
+        'This warranty package is currently inactive and cannot be sold.',
       );
     }
 
