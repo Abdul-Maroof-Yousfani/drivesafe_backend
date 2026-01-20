@@ -62,6 +62,18 @@ export class WarrantyPackageController {
     };
   }
 
+  @Post(':id/restore')
+  @Roles('super_admin', 'admin')
+  @ApiOperation({ summary: 'Restore a soft-deleted warranty package' })
+  async restore(@Param('id') id: string, @Req() req: RequestWithUser) {
+    const pkg = await this.warrantyPackageService.restore(id, req.user.userId);
+    return {
+      status: true,
+      message: 'Warranty package restored successfully',
+      data: pkg,
+    };
+  }
+
   @Get()
   @Roles('super_admin', 'admin', 'dealer')
   @ApiOperation({ summary: 'Get all warranty packages' })
@@ -76,9 +88,23 @@ export class WarrantyPackageController {
     description: 'Include preset packages',
     type: Boolean,
   })
+  @ApiQuery({
+    name: 'includeInactive',
+    required: false,
+    description: 'Include inactive packages',
+    type: Boolean,
+  })
+  @ApiQuery({
+    name: 'includeDeleted',
+    required: false,
+    description: 'Include soft-deleted packages',
+    type: Boolean,
+  })
   async findAll(
     @Query('context') context: string | undefined,
     @Query('includePresets') includePresets: string | undefined,
+    @Query('includeInactive') includeInactive: string | undefined,
+    @Query('includeDeleted') includeDeleted: string | undefined,
     @Req() req: RequestWithUser,
   ) {
     const dealerId = req.user.role === 'dealer' ? req.user.tenantId : undefined;
@@ -88,10 +114,16 @@ export class WarrantyPackageController {
         : includePresets === 'false'
           ? false
           : undefined;
+          
+    const includeInactiveBool = includeInactive === 'true';
+    const includeDeletedBool = includeDeleted === 'true';
+
     const packages = await this.warrantyPackageService.findAll(
       context,
       dealerId,
       includePresetsBool,
+      includeInactiveBool,
+      includeDeletedBool,
     );
     return {
       status: true,

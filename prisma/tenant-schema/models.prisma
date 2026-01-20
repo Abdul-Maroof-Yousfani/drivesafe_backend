@@ -605,6 +605,7 @@ model WarrantyPackage {
   createdById       String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
   
   warrantySales     WarrantySale[]
   warrantyAssignments WarrantyAssignment[]

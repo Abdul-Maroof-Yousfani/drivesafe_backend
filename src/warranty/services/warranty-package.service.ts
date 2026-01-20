@@ -150,14 +150,26 @@ export class WarrantyPackageService {
     context?: string,
     dealerId?: string,
     includePresets?: boolean,
+    includeInactive?: boolean,
+    includeDeleted?: boolean,
   ): Promise<any[]> {
     const where: any = {};
+    
+    // Default: exclude deleted. If includeDeleted is true, show ALL (deleted or not)
+    if (!includeDeleted) {
+      where.deletedAt = null;
+    }
+    
     if (context) {
       where.context = context;
     }
     // If includePresets is false, exclude presets
     if (includePresets === false) {
       where.isPreset = false;
+    }
+    // If includeInactive is false, only show active
+    if (includeInactive === false) {
+      where.status = 'active';
     }
 
     const client = dealerId
@@ -187,8 +199,8 @@ export class WarrantyPackageService {
       client = await this.tenantDb.getTenantPrismaByDealerId(dealerId);
     }
 
-    const pkg = await client.warrantyPackage.findUnique({
-      where: { id },
+    const pkg = await client.warrantyPackage.findFirst({
+      where: { id, deletedAt: null },
       include: {
         items: {
           include: {
@@ -501,11 +513,13 @@ export class WarrantyPackageService {
       where: { id },
     });
 
-    if (!existing) {
+    if (!existing || existing.deletedAt) {
       throw new NotFoundException('Warranty package not found');
     }
 
-    // Delete from all tenant databases
+    const deletedAt = new Date();
+
+    // Soft delete from all tenant databases
     const tenants = await this.prisma.dealer.findMany({
       select: { id: true },
     });
@@ -515,18 +529,22 @@ export class WarrantyPackageService {
         const tenantPrisma = await this.tenantDb.getTenantPrismaByDealerId(
           tenant.id,
         );
-        await tenantPrisma.warrantyPackage.deleteMany({
+        await tenantPrisma.warrantyPackage.updateMany({
           where: { id },
+          data: { deletedAt },
         });
       } catch (err) {
         this.logger.warn(
-          `Failed to delete package ${id} from tenant ${tenant.id}: ${err.message}`,
+          `Failed to soft delete package ${id} from tenant ${tenant.id}: ${err.message}`,
         );
       }
     }
 
-    // Delete from master
-    await this.prisma.warrantyPackage.delete({ where: { id } });
+    // Soft delete from master
+    await this.prisma.warrantyPackage.update({
+      where: { id },
+      data: { deletedAt },
+    });
 
     await this.activityLog.log({
       userId,
@@ -537,6 +555,61 @@ export class WarrantyPackageService {
       description: `Deleted warranty package: ${existing.name}`,
       oldValues: existing,
     });
+  }
+
+  /**
+   * Restore soft-deleted warranty package
+   */
+  async restore(id: string, userId: string): Promise<any> {
+    const existing = await this.prisma.warrantyPackage.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Warranty package not found');
+    }
+
+    if (!existing.deletedAt) {
+      return existing; // Already active
+    }
+
+    // Restore in all tenant databases
+    const tenants = await this.prisma.dealer.findMany({
+      select: { id: true },
+    });
+
+    for (const tenant of tenants) {
+      try {
+        const tenantPrisma = await this.tenantDb.getTenantPrismaByDealerId(
+          tenant.id,
+        );
+        await tenantPrisma.warrantyPackage.updateMany({
+          where: { id },
+          data: { deletedAt: null },
+        });
+      } catch (err) {
+        this.logger.warn(
+          `Failed to restore package ${id} from tenant ${tenant.id}: ${err.message}`,
+        );
+      }
+    }
+
+    // Restore in master
+    const restored = await this.prisma.warrantyPackage.update({
+      where: { id },
+      data: { deletedAt: null },
+    });
+
+    await this.activityLog.log({
+      userId,
+      action: 'restore',
+      module: 'warranty-packages',
+      entity: 'WarrantyPackage',
+      entityId: id,
+      description: `Restored warranty package: ${restored.name}`,
+    });
+
+    return restored;
   }
 
   /**
@@ -578,8 +651,12 @@ export class WarrantyPackageService {
       where: { id: warrantyPackageId },
     });
 
-    if (!masterPkg) {
+    if (!masterPkg || masterPkg.deletedAt) {
       throw new NotFoundException('Warranty package not found');
+    }
+
+    if (masterPkg.status !== 'active') {
+      throw new BadRequestException('Cannot assign an inactive warranty package');
     }
 
     // Get tenant Prisma client
