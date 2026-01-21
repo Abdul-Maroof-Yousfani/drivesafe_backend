@@ -106,7 +106,7 @@ export class DashboardService {
 
               const revenue = Number(totalAmountRes.rows[0]?.sum || 0);
               dealerAnalytics.push({
-                name: dealer.businessNameTrading || dealer.businessNameLegal,
+                name: dealer.businessNameLegal ,
                 revenue,
               });
 
