@@ -215,12 +215,40 @@ export class DirectCustomerService {
         data: {
           customerId: newCustomer.id,
           make: vehicle.make,
-          model: vehicle.model,
+          model: vehicle.model || "Unknown", // Default if not provided (DVLA doesn't return model)
           year: vehicle.year,
           vin: vehicle.vin || null,
           registrationNumber: vehicle.registrationNumber || null,
           mileage: vehicle.mileage,
           transmission: vehicle.transmission || null,
+          dvlaTaxStatus: vehicle.dvlaTaxStatus || null,
+          dvlaTaxDueDate: vehicle.dvlaTaxDueDate ? new Date(vehicle.dvlaTaxDueDate) : null,
+          dvlaMotStatus: vehicle.dvlaMotStatus || null,
+          dvlaMotExpiryDate: vehicle.dvlaMotExpiryDate ? new Date(vehicle.dvlaMotExpiryDate) : null,
+          dvlaYearOfManufacture:
+            typeof vehicle.dvlaYearOfManufacture === 'number'
+              ? vehicle.dvlaYearOfManufacture
+              : null,
+          dvlaEngineCapacity:
+            typeof vehicle.dvlaEngineCapacity === 'number'
+              ? vehicle.dvlaEngineCapacity
+              : null,
+          dvlaCo2Emissions:
+            typeof vehicle.dvlaCo2Emissions === 'number'
+              ? vehicle.dvlaCo2Emissions
+              : null,
+          dvlaFuelType: vehicle.dvlaFuelType || null,
+          dvlaMarkedForExport:
+            typeof vehicle.dvlaMarkedForExport === 'boolean'
+              ? vehicle.dvlaMarkedForExport
+              : null,
+          dvlaColour: vehicle.dvlaColour || null,
+          dvlaTypeApproval: vehicle.dvlaTypeApproval || null,
+          dvlaDateOfLastV5CIssued: vehicle.dvlaDateOfLastV5CIssued
+            ? new Date(vehicle.dvlaDateOfLastV5CIssued)
+            : null,
+          dvlaWheelplan: vehicle.dvlaWheelplan || null,
+          dvlaMonthOfFirstRegistration: vehicle.dvlaMonthOfFirstRegistration || null,
           status: 'active',
         },
       });
@@ -325,7 +353,7 @@ export class DirectCustomerService {
           packageName: warrantyPackage.name,
           policyNumber: result.warrantySale.policyNumber,
           vehicleMake: vehicle.make,
-          vehicleModel: vehicle.model,
+          vehicleModel: vehicle.model || "Unknown",
           vehicleYear: vehicle.year,
           coverageStartDate: result.warrantySale.coverageStartDate,
           coverageEndDate: result.warrantySale.coverageEndDate,

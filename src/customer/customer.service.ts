@@ -94,6 +94,15 @@ export class CustomerService {
             create: vehicles?.map((v) => ({
               ...v,
               year: Number(v.year),
+              dvlaTaxDueDate: v.dvlaTaxDueDate
+                ? new Date(v.dvlaTaxDueDate)
+                : null,
+              dvlaMotExpiryDate: v.dvlaMotExpiryDate
+                ? new Date(v.dvlaMotExpiryDate)
+                : null,
+              dvlaDateOfLastV5CIssued: v.dvlaDateOfLastV5CIssued
+                ? new Date(v.dvlaDateOfLastV5CIssued)
+                : null,
             })),
           },
         },
@@ -481,6 +490,55 @@ export class CustomerService {
         updateData.mileage = Number(updateVehicleDto.mileage);
       if (updateVehicleDto.transmission !== undefined)
         updateData.transmission = updateVehicleDto.transmission;
+
+      // DVLA snapshot fields
+      if (updateVehicleDto.dvlaTaxStatus !== undefined)
+        updateData.dvlaTaxStatus = updateVehicleDto.dvlaTaxStatus?.trim() || null;
+      if (updateVehicleDto.dvlaTaxDueDate !== undefined)
+        updateData.dvlaTaxDueDate = updateVehicleDto.dvlaTaxDueDate
+          ? new Date(updateVehicleDto.dvlaTaxDueDate)
+          : null;
+      if (updateVehicleDto.dvlaMotStatus !== undefined)
+        updateData.dvlaMotStatus = updateVehicleDto.dvlaMotStatus?.trim() || null;
+      if (updateVehicleDto.dvlaMotExpiryDate !== undefined)
+        updateData.dvlaMotExpiryDate = updateVehicleDto.dvlaMotExpiryDate
+          ? new Date(updateVehicleDto.dvlaMotExpiryDate)
+          : null;
+      if (updateVehicleDto.dvlaYearOfManufacture !== undefined)
+        updateData.dvlaYearOfManufacture =
+          updateVehicleDto.dvlaYearOfManufacture != null
+            ? Number(updateVehicleDto.dvlaYearOfManufacture)
+            : null;
+      if (updateVehicleDto.dvlaEngineCapacity !== undefined)
+        updateData.dvlaEngineCapacity =
+          updateVehicleDto.dvlaEngineCapacity != null
+            ? Number(updateVehicleDto.dvlaEngineCapacity)
+            : null;
+      if (updateVehicleDto.dvlaCo2Emissions !== undefined)
+        updateData.dvlaCo2Emissions =
+          updateVehicleDto.dvlaCo2Emissions != null
+            ? Number(updateVehicleDto.dvlaCo2Emissions)
+            : null;
+      if (updateVehicleDto.dvlaFuelType !== undefined)
+        updateData.dvlaFuelType = updateVehicleDto.dvlaFuelType?.trim() || null;
+      if (updateVehicleDto.dvlaMarkedForExport !== undefined)
+        updateData.dvlaMarkedForExport =
+          updateVehicleDto.dvlaMarkedForExport ?? null;
+      if (updateVehicleDto.dvlaColour !== undefined)
+        updateData.dvlaColour = updateVehicleDto.dvlaColour?.trim() || null;
+      if (updateVehicleDto.dvlaTypeApproval !== undefined)
+        updateData.dvlaTypeApproval =
+          updateVehicleDto.dvlaTypeApproval?.trim() || null;
+      if (updateVehicleDto.dvlaDateOfLastV5CIssued !== undefined)
+        updateData.dvlaDateOfLastV5CIssued =
+          updateVehicleDto.dvlaDateOfLastV5CIssued
+            ? new Date(updateVehicleDto.dvlaDateOfLastV5CIssued)
+            : null;
+      if (updateVehicleDto.dvlaWheelplan !== undefined)
+        updateData.dvlaWheelplan = updateVehicleDto.dvlaWheelplan?.trim() || null;
+      if (updateVehicleDto.dvlaMonthOfFirstRegistration !== undefined)
+        updateData.dvlaMonthOfFirstRegistration =
+          updateVehicleDto.dvlaMonthOfFirstRegistration?.trim() || null;
 
       if (Object.keys(updateData).length === 0) {
         throw new BadRequestException('No fields to update');

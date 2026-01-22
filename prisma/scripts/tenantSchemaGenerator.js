@@ -102,3 +102,19 @@ async function generateTenantSchema({ repoRoot }) {
 }
 
 module.exports = { generateTenantSchema };
+
+// Allow running as a script: `node prisma/scripts/tenantSchemaGenerator.js`
+if (require.main === module) {
+  (async () => {
+    const repoRoot = process.cwd();
+    const { outModelsFile, modelCount } = await generateTenantSchema({ repoRoot });
+    // eslint-disable-next-line no-console
+    console.log(
+      `Tenant schema generated: ${outModelsFile} (${modelCount} models)`,
+    );
+  })().catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error('Failed to generate tenant schema:', err);
+    process.exitCode = 1;
+  });
+}
