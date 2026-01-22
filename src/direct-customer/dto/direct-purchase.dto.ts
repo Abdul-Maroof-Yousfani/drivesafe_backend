@@ -19,10 +19,10 @@ export class VehicleDetailsDto {
   @IsNotEmpty()
   make: string;
 
-  @ApiProperty({ example: 'Camry' })
+  @ApiPropertyOptional({ example: 'Camry' })
   @IsString()
-  @IsNotEmpty()
-  model: string;
+  @IsOptional()
+  model?: string;
 
   @ApiProperty({ example: 2023 })
   @Type(() => Number)
@@ -51,6 +51,80 @@ export class VehicleDetailsDto {
   @IsEnum(['manual', 'automatic'])
   @IsOptional()
   transmission?: 'manual' | 'automatic';
+
+  // --- DVLA snapshot fields (optional) ---
+
+  @ApiPropertyOptional({ example: 'Untaxed' })
+  @IsString()
+  @IsOptional()
+  dvlaTaxStatus?: string;
+
+  @ApiPropertyOptional({ example: '2025-04-29' })
+  @IsString()
+  @IsOptional()
+  dvlaTaxDueDate?: string;
+
+  @ApiPropertyOptional({ example: 'Valid' })
+  @IsString()
+  @IsOptional()
+  dvlaMotStatus?: string;
+
+  @ApiPropertyOptional({ example: '2026-08-27' })
+  @IsString()
+  @IsOptional()
+  dvlaMotExpiryDate?: string;
+
+  @ApiPropertyOptional({ example: 2016 })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  dvlaYearOfManufacture?: number;
+
+  @ApiPropertyOptional({ example: 1200 })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  dvlaEngineCapacity?: number;
+
+  @ApiPropertyOptional({ example: 100 })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  dvlaCo2Emissions?: number;
+
+  @ApiPropertyOptional({ example: 'PETROL' })
+  @IsString()
+  @IsOptional()
+  dvlaFuelType?: string;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  dvlaMarkedForExport?: boolean;
+
+  @ApiPropertyOptional({ example: 'BLACK' })
+  @IsString()
+  @IsOptional()
+  dvlaColour?: string;
+
+  @ApiPropertyOptional({ example: 'M1' })
+  @IsString()
+  @IsOptional()
+  dvlaTypeApproval?: string;
+
+  @ApiPropertyOptional({ example: '2025-09-15' })
+  @IsString()
+  @IsOptional()
+  dvlaDateOfLastV5CIssued?: string;
+
+  @ApiPropertyOptional({ example: '2 AXLE RIGID BODY' })
+  @IsString()
+  @IsOptional()
+  dvlaWheelplan?: string;
+
+  @ApiPropertyOptional({ example: '2016-10' })
+  @IsString()
+  @IsOptional()
+  dvlaMonthOfFirstRegistration?: string;
 }
 
 export class CustomerDetailsDto {

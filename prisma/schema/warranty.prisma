@@ -352,6 +352,21 @@ model CustomerVehicle {
   registrationNumber String?
   mileage            Int      @default(0)
   transmission       String?
+  // DVLA vehicle enquiry snapshot fields
+  dvlaTaxStatus             String?
+  dvlaTaxDueDate            DateTime?
+  dvlaMotStatus             String?
+  dvlaMotExpiryDate         DateTime?
+  dvlaYearOfManufacture     Int?
+  dvlaEngineCapacity        Int?
+  dvlaCo2Emissions          Int?
+  dvlaFuelType              String?
+  dvlaMarkedForExport       Boolean?
+  dvlaColour                String?
+  dvlaTypeApproval          String?
+  dvlaDateOfLastV5CIssued   DateTime?
+  dvlaWheelplan             String?
+  dvlaMonthOfFirstRegistration String?
   status             String   @default("active")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
