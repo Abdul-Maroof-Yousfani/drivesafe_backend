@@ -805,7 +805,8 @@ export class WarrantyPackageService {
     // This logic is no longer needed as benefits are not directly tied to assignments in the same way as sales.
     // The package items themselves define the benefits.
 
-    // Create invoice record in master for the assignment
+    // Invoice record creation for assignment removed per user request
+    /*
     if (warrantyPrice > 0) {
       try {
         const invoiceNumber = `INV-SA-${dealer.id.slice(0, 6).toUpperCase()}-${Date.now()}`;
@@ -830,6 +831,7 @@ export class WarrantyPackageService {
         // Consider whether to rollback here, but for now just log
       }
     }
+    */
 
     await this.activityLog.log({
       userId,
