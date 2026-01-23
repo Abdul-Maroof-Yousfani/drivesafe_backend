@@ -63,7 +63,7 @@ export class DashboardService {
       });
 
       // Aggregate dealer invoices and package sales across all tenant databases
-      const dealerAnalytics: Array<{ name: string; revenue: number }> = [];
+      const dealerAnalytics: Array<{ name: string; revenue: number; policies: number; pendingRevenue: number }> = [];
 
       const dealerAggs = await Promise.all(
         dealers.map(async (dealer) => {
@@ -105,15 +105,20 @@ export class DashboardService {
                 ]);
 
               const revenue = Number(totalAmountRes.rows[0]?.sum || 0);
+              const pendingRevenue = Number(pendingAmountRes.rows[0]?.sum || 0);
+              const policies = packageSalesRes.rows.reduce((sum: number, s: any) => sum + parseInt(s.count || '0'), 0);
+              
               dealerAnalytics.push({
                 name: dealer.businessNameLegal ,
                 revenue,
+                pendingRevenue,
+                policies,
               });
 
               return {
                 totalAmount: revenue,
                 pendingCount: parseInt(pendingCountRes.rows[0]?.count || '0'),
-                pendingAmount: Number(pendingAmountRes.rows[0]?.sum || 0),
+                pendingAmount: pendingRevenue,
                 packageSales: packageSalesRes.rows,
               };
             } finally {
