@@ -18,6 +18,7 @@ import { join } from 'path';
 import { RolesModule } from './roles/roles.module';
 import { MailModule } from './mail/mail.module';
 import { DirectCustomerModule } from './direct-customer/direct-customer.module';
+import { IntegrationModule } from './integration/integration.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { DirectCustomerModule } from './direct-customer/direct-customer.module';
     InvoiceModule,
     MailModule,
     DirectCustomerModule,
+    IntegrationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
