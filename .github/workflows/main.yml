@@ -24,7 +24,7 @@ jobs:
           echo "Found schema at: $SCHEMA_PATH"
           npx prisma generate --schema=$SCHEMA_PATH
         env:
-          DATABASE_URL: "postgresql://drivesafewarranty:lkajd65736%5Ejdb000%2D0JJh@127.0.0.1:5432/drivesafewarranty_db"
+          DATABASE_URL: "postgresql://drivesafewarranty:kajd65736%5Ejdb000%2D0JJh@127.0.0.1:5432/drivesafewarranty_db"
 
       - name: Build Project
         run: npm run build
